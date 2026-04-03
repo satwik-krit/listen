@@ -14,9 +14,8 @@ def process_incoming_audio(file_path):
     return feature_image
 
 
-if __name__ == "__main__":
-    # Example usage:
-    incoming_file = Path("path/to/new/streamed_audio.wav")
-    if incoming_file.exists():
-        features = process_incoming_audio(incoming_file)
-        print(f"Extracted features shape: {features.shape}")
+# if __name__ == "__main__":
+#     incoming_file = Path("path/to/new/streamed_audio.wav")
+#     if incoming_file.exists():
+#         features = process_incoming_audio(incoming_file)
+#         print(f"Extracted features shape: {features.shape}")

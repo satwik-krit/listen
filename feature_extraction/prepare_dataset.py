@@ -3,10 +3,10 @@ from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 import numpy as np
 from tqdm import tqdm
-import joblib  # Used to save your scalers
+import joblib
 
 import config
-from features import get_normal_baseline, process_file
+from features import get_normal_baseline, process_file, create_master_mask
 
 
 def process_file_and_save(
@@ -14,12 +14,13 @@ def process_file_and_save(
     scaler_mel,
     scaler_delta,
     scaler_delta2,
+    master_noise,
     input_dir,
     output_dir,
 ):
     try:
         mel_data, audio_features = process_file(
-            file_path, scaler_mel, scaler_delta, scaler_delta2
+            file_path, scaler_mel, scaler_delta, scaler_delta2, master_noise
         )
         relative_path = file_path.relative_to(input_dir)
         print(relative_path)
@@ -51,12 +52,18 @@ def batch_process(input_dir, output_dir, scaler_dir):
     start = time.perf_counter()
     all_files = list(input_dir.rglob("*.wav"))
 
+    # Create the noise for our master mask
+    print("CREATING MASTER MASK...")
+    # Last 20 files are most likely normal, so pass them without checking
+    master_noise = create_master_mask(all_files[-1:-20:-1])
+
     s_mel, s_delta, s_delta2 = get_normal_baseline(all_files[-1:-20:-1])
 
     scaler_dir.mkdir(parents=True, exist_ok=True)
     joblib.dump(s_mel, scaler_dir / "scaler_mel.pkl")
     joblib.dump(s_delta, scaler_dir / "scaler_delta.pkl")
     joblib.dump(s_delta2, scaler_dir / "scaler_delta2.pkl")
+    joblib.dump(master_noise, scaler_dir / "master_noise.pkl")
 
     worker_func = partial(
         process_file_and_save,
@@ -65,6 +72,7 @@ def batch_process(input_dir, output_dir, scaler_dir):
         scaler_mel=s_mel,
         scaler_delta=s_delta,
         scaler_delta2=s_delta2,
+        master_noise=master_noise,
     )
 
     with ProcessPoolExecutor() as executor:

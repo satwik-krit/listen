@@ -2,7 +2,8 @@ import librosa
 import librosa.display
 import matplotlib.pyplot as plt
 import config
-from features import process_log_mel_spectrogram
+from features import process_log_mel_spectrogram, remove_background_noise
+import soundfile
 
 
 def plot_mel_spectrogram(*file_paths):
@@ -29,11 +30,36 @@ def plot_mel_spectrogram(*file_paths):
     plt.show()
 
 
+def convert_to_audio(norm_mel, output):
+    s = librosa.db_to_power(norm_mel)
+
+    y_re = librosa.feature.inverse.mel_to_audio(
+        s, sr=config.SAMPLING_RATE, n_fft=config.N_FFT, hop_length=config.HOP_LENGTH
+    )
+
+    soundfile.write(output, y_re, int(config.SAMPLING_RATE))
+
+
 if __name__ == "__main__":
     from pathlib import Path
 
-    sample_1 = config.INPUT_DIR / "abnormal/00000002.wav"
-    sample_2 = config.INPUT_DIR / "normal/00000000.wav"
+    sample_1 = config.INPUT_DIRS[0] / "abnormal/00000002.wav"
+    sample_2 = config.INPUT_DIRS[0] / "normal/00000000.wav"
 
-    if sample_1.exists() and sample_2.exists():
-        plot_mel_spectrogram(sample_1, sample_2)
+    # if sample_1.exists() and sample_2.exists():
+    #     plot_mel_spectrogram(sample_1, sample_2)
+
+    y, sr = librosa.load(sample_2, sr=config.SAMPLING_RATE)
+    mel_s = process_log_mel_spectrogram(y, sr=config.SAMPLING_RATE)
+    output = config.OUTPUT_DIRS[0] / "re.wav"
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    # Calculate how many samples are in 0.5 seconds
+    # 0.5 * 16000 = 8000 samples
+    n_noise_samples = int(0.5 * config.SAMPLING_RATE)
+
+    # Extract the noise baseline
+    noise_sample = y[:n_noise_samples]
+
+    y = remove_background_noise(y, config.SAMPLING_RATE, noise_sample)
+    convert_to_audio(y, output)

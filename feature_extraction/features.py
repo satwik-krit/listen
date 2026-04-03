@@ -1,4 +1,5 @@
 import numpy as np
+import noisereduce
 import librosa
 from sklearn.preprocessing import MinMaxScaler
 import warnings
@@ -54,13 +55,13 @@ def process_log_mel_spectrogram(y, sr, scaler_mel=None):
 
 def process_delta(series, scaler_delta, order=1):
     d = librosa.feature.delta(series, order=order)
-    # Changed from fit_transform to transform so it uses your baseline!
     d_scaled = scaler_delta.transform(d.flatten().reshape(-1, 1))
     return d_scaled.reshape(d.shape)
 
 
-def process_file(file_path, scaler_mel, scaler_delta, scaler_delta2):
+def process_file(file_path, scaler_mel, scaler_delta, scaler_delta2, master_noise):
     y, sr = librosa.load(file_path, sr=config.SAMPLING_RATE)
+    y = remove_background_noise(y, sr, master_noise)
     norm_mel = process_log_mel_spectrogram(y, sr, scaler_mel)
     delta_spectrogram = process_delta(norm_mel, scaler_delta)
     delta2_spectrogram = process_delta(norm_mel, scaler_delta2, order=2)
@@ -112,7 +113,23 @@ def extract_audio_features(y, sr):
     )
 
 
-# --- Example Usage ---
-# y, sr = librosa.load("your_audio.wav", sr=16000)
-# features = extract_audio_features(y, sr)
-# print(features)
+def remove_background_noise(y, sr, master_noise=None):
+
+    reduced_noise_y = noisereduce.reduce_noise(
+        y=y,
+        sr=sr,
+        y_noise=master_noise,
+        prop_decrease=1.0,
+    )
+
+    return reduced_noise_y
+
+
+def create_master_mask(normal_files):
+    noise_chunks = list()
+
+    for file in normal_files[:20]:
+        y, _ = librosa.load(file, sr=config.SAMPLING_RATE, duration=0.5)
+        noise_chunks.append(y)
+
+    return np.concatenate(noise_chunks)

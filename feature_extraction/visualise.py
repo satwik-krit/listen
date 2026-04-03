@@ -4,6 +4,30 @@ import matplotlib.pyplot as plt
 import config
 from features import process_log_mel_spectrogram, remove_background_noise
 import soundfile
+import joblib
+
+
+def plot_difference_mel_spectrogram(file1, file2, input_dir):
+    y1, _ = librosa.load(file1, sr=config.SAMPLING_RATE)
+    y2, _ = librosa.load(file2, sr=config.SAMPLING_RATE)
+
+    master_noise = joblib.load(config.SCALER_DIRS[0] / "master_noise.pkl")
+
+    y1 = remove_background_noise(y1, config.SAMPLING_RATE, master_noise)
+    y2 = remove_background_noise(y2, config.SAMPLING_RATE, master_noise)
+
+    # We don't necessarily need the strict scaler just to visualize the mel
+    mel1 = process_log_mel_spectrogram(y1, sr=config.SAMPLING_RATE)
+    mel2 = process_log_mel_spectrogram(y2, sr=config.SAMPLING_RATE)
+
+    plt.title(
+        f"Difference Mel Spectrogram: {file1.relative_to(input_dir)} and {file2.relative_to(input_dir)}"
+    )
+    librosa.display.specshow(
+        mel1 - mel2, x_axis="time", y_axis="mel", sr=config.SAMPLING_RATE
+    )
+    plt.colorbar(format="+%.02f", location="right", shrink=0.8)
+    plt.show()
 
 
 def plot_mel_spectrogram(*file_paths):
@@ -46,20 +70,4 @@ if __name__ == "__main__":
     sample_1 = config.INPUT_DIRS[0] / "abnormal/00000002.wav"
     sample_2 = config.INPUT_DIRS[0] / "normal/00000000.wav"
 
-    # if sample_1.exists() and sample_2.exists():
-    #     plot_mel_spectrogram(sample_1, sample_2)
-
-    y, sr = librosa.load(sample_2, sr=config.SAMPLING_RATE)
-    mel_s = process_log_mel_spectrogram(y, sr=config.SAMPLING_RATE)
-    output = config.OUTPUT_DIRS[0] / "re.wav"
-    output.parent.mkdir(parents=True, exist_ok=True)
-
-    # Calculate how many samples are in 0.5 seconds
-    # 0.5 * 16000 = 8000 samples
-    n_noise_samples = int(0.5 * config.SAMPLING_RATE)
-
-    # Extract the noise baseline
-    noise_sample = y[:n_noise_samples]
-
-    y = remove_background_noise(y, config.SAMPLING_RATE, noise_sample)
-    convert_to_audio(y, output)
+    plot_difference_mel_spectrogram(sample_2, sample_1, config.INPUT_DIRS[0])

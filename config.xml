@@ -5,16 +5,19 @@
             <path>raw_data/6_dB_valve/valve/id_00/</path>
             <path>raw_data/6_dB_valve/valve/id_02/</path>
             <path>raw_data/6_dB_valve/valve/id_04/</path>
+            <path>raw_data/6_dB_valve/valve/id_06/</path>
         </inputs>
         <outputs>
             <path>processed_features/6_dB_valve/id_00/</path>
             <path>processed_features/6_dB_valve/id_02/</path>
             <path>processed_features/6_dB_valve/id_04/</path>
+            <path>processed_features/6_dB_valve/id_06/</path>
         </outputs>
         <scalers>
             <path>scalers/6_dB_valve/id_00/</path>
             <path>scalers/6_dB_valve/id_02/</path>
             <path>scalers/6_dB_valve/id_04/</path>
+            <path>scalers/6_dB_valve/id_06/</path>
         </scalers>
     </directories>
     

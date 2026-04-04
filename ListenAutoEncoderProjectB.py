@@ -204,4 +204,3 @@ def compute_anomaly_score(model, spectrogram_tensor, device):
     heatmap = pixel_error.mean(dim=1)      
     score = heatmap.mean().item()        
 
-    return score, heatmap.squeeze().cpu().numpy()

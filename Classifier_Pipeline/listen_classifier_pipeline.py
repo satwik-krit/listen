@@ -5,12 +5,12 @@ import numpy as np
 import pandas as pd
 from joblib import load,dump
 
-model_component = load("/content/drive/MyDrive/Colab Notebooks/Pipeline/model_finaL.joblib")
+model_component = load("model_finaL.joblib")
 
-model_valve = load("/content/drive/MyDrive/Colab Notebooks/Pipeline/model_valve.joblib")
-model_fan = load("/content/drive/MyDrive/Colab Notebooks/Pipeline/model_fan.joblib")
-model_pump = load("/content/drive/MyDrive/Colab Notebooks/Pipeline/model_pump.joblib")
-model_slider = load("/content/drive/MyDrive/Colab Notebooks/Pipeline/model_slider.joblib")
+model_valve = load("model_valve.joblib")
+model_fan = load("model_fan.joblib")
+model_pump = load("model_pump.joblib")
+model_slider = load("model_slider.joblib")
 
 component_models = {
     0: model_fan,

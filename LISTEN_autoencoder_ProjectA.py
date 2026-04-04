@@ -288,7 +288,7 @@ void loop() {{
     if (mse >= 0.0f) {{
         Serial.print("Current MSE: "); Serial.println(mse, 6);
         if (mse > ALARM_THRESHOLD) {{
-            Serial.println("🚨 CRITICAL ALARM: Anomaly Detected 🚨");
+            Serial.println("CRITICAL ALARM: Anomaly Detected");
         }}
     }}
     delay(500);

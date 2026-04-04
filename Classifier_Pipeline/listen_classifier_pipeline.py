@@ -26,13 +26,11 @@ component_outputs = {
     3: {0: "valve 00", 1: "valve 02", 2: "valve 04"}
 }
 
-to_search = np.array(""" your numpy array to be tested to be entered here """).reshape(1,8)
-df = pd.DataFrame(to_search)
 
 def predict(np_arr):
-  print("0")
+  np_arr = pd.DataFrame(np_arr)
   y_comp = model_component.predict(np_arr) # Extract the integer value from the numpy array
-  print("1")
+  
   if y_comp == 0:
     y_fan = model_fan.predict(np_arr)
     return component_outputs[y_comp.item()][y_fan.item()]
@@ -46,5 +44,4 @@ def predict(np_arr):
     y_valve = model_valve.predict(np_arr)
     return component_outputs[y_comp.item()][y_valve.item()]
 
-print(predict(df))
 

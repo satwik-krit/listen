@@ -1,49 +1,6 @@
 """
 xai_layer.py  —  Project B XAI Layer
-======================================
-Sits on top of trained CAE models and produces three explainability
-outputs for any incoming spectrogram tensor:
-
-    1. anomaly_score   – scalar MSE vs threshold
-    2. residual_map    – (3, H, W) per-channel reconstruction error
-    3. shap_map        – (3, H, W) GradientSHAP attribution map
-
-All outputs are plain numpy arrays — the UI layer decides how to render them.
-
-Architecture recovered from weights
--------------------------------------
-    Encoder : Conv2d  3 → 32 → 64 → 128 → 256 → 256   (5 × MaxPool2d)
-    Decoder : mirror with MaxUnpool2d + Conv2d
-    Input   : (batch, 3, H, W)  — 3-channel Mel / Delta / Delta-Delta
-
-NOTE on SHAP backend
----------------------
-DeepExplainer is incompatible with MaxUnpool2d (gradient-hook / inplace
-LeakyReLU conflicts). We use shap.GradientExplainer, which works via
-SmoothGrad-style gradient sampling and is equally valid for attribution.
-Output shapes are identical — the UI sees the same (3, H, W) array either way.
-
-Usage
-------
-    from xai_layer import ProjectBXAI
-
-    xai = ProjectBXAI(
-        model_path       = "cnn_ae_best.pth",
-        stats_path       = "global_stats.json",
-        threshold_path   = "threshold_B.txt",
-        background_specs = normal_tensor,      # (N, 3, H, W) normalised
-        device           = "cuda",
-    )
-
-    result = xai.explain(spec_tensor)          # (3, H, W)
-
-    result.anomaly_score    -> float
-    result.is_anomaly        -> bool
-    result.residual_map      -> np.ndarray (3, H, W)
-    result.residual_2d       -> np.ndarray (H, W)      mean across channels
-    result.shap_map          -> np.ndarray (3, H, W)
-    result.shap_per_channel  -> np.ndarray (3,)         mean |SHAP| per channel
-    result.channel_verdict   -> dict  channel_name -> contribution %
+   
 """
 
 from __future__ import annotations
@@ -60,7 +17,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 warnings.filterwarnings("ignore")
-
 
 # ─────────────────────────────────────────────────────────────
 # 1.  MODEL  (reconstructed from saved weight shapes)
@@ -127,15 +83,11 @@ class CAEModel(nn.Module):
 
         return x
 
-
 def load_cae(model_path: str | Path, device: str = "cpu") -> CAEModel:
     """Load CAEModel from a .pth state-dict, remapping decoder key indices."""
     state = torch.load(model_path, map_location=device, weights_only=True)
     model = CAEModel().to(device)
 
-    # Saved decoder keys: decoder.decN.1.weight, decoder.decN.2.weight
-    # Our dec_block:       [0]=Conv, [1]=BN, [2]=LReLU
-    # → shift saved index by -1
     remapped = {}
     for k, v in state.items():
         if k.startswith("decoder."):
@@ -153,7 +105,6 @@ def load_cae(model_path: str | Path, device: str = "cpu") -> CAEModel:
 
     model.eval()
     return model
-
 
 # ─────────────────────────────────────────────────────────────
 # 2.  MSE WRAPPER  (scalar target for GradientSHAP)
@@ -193,9 +144,6 @@ class XAIResult:
     shap_map:         np.ndarray          # (3, H, W)  raw SHAP values
     shap_per_channel: np.ndarray          # (3,)       mean |SHAP| per channel
     channel_verdict:  dict = field(default_factory=dict)
-    # e.g. {"Mel (static frequency anomaly)": 42.1,
-    #        "Delta (rate of change)": 35.7,
-    #        "Delta-Delta (acceleration)": 22.2}
 
     def summary(self) -> str:
         lines = [
@@ -217,20 +165,6 @@ class XAIResult:
 # ─────────────────────────────────────────────────────────────
 
 class ProjectBXAI:
-    """
-    XAI layer for a single machine-type / machine-id model.
-
-    Parameters
-    ----------
-    model_path        : path to cnn_ae_best.pth
-    stats_path        : path to global_stats.json
-    threshold_path    : path to threshold_B.txt
-    background_specs  : (N, 3, H, W) torch.Tensor of NORMAL spectrograms
-                        already channel-normalised. Pass None to skip SHAP.
-    n_background      : how many background samples to use for SHAP
-    shap_nsamples     : gradient samples per SHAP call (lower = faster)
-    device            : "cuda" | "cpu"
-    """
 
     CHANNEL_NAMES = [
         "Mel (static frequency anomaly)",
@@ -275,18 +209,7 @@ class ProjectBXAI:
         spec:      torch.Tensor,
         normalise: bool = True,
     ) -> XAIResult:
-        """
-        Run full XAI pipeline on one spectrogram.
-
-        Parameters
-        ----------
-        spec      : (3, H, W) or (1, 3, H, W) torch.Tensor
-        normalise : apply channel normalisation before inference
-
-        Returns
-        -------
-        XAIResult with all arrays as numpy float32, ready for the UI
-        """
+      
         if spec.dim() == 3:
             spec = spec.unsqueeze(0)
         if normalise:
@@ -361,12 +284,9 @@ class ProjectBXAI:
 
         return arr.astype(np.float32), per_ch.astype(np.float32), verdict
 
-
 # ─────────────────────────────────────────────────────────────
 # 5.  REGISTRY  (all 16 machine-type/id combos)
 # ─────────────────────────────────────────────────────────────
-
-# ... [Keep Architecture and Result Dataclass the same as your file] ...
 
 class ProjectBRegistry:
     """

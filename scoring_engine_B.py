@@ -6,13 +6,12 @@ from typing import Optional
 
 import librosa
 import matplotlib
-matplotlib.use("Agg")          # MUST be before any other matplotlib import
+matplotlib.use("Agg")        
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1.  ARCHITECTURE  (must exactly match training)
@@ -49,7 +48,6 @@ class Encoder(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.layers(x)
 
-
 class Decoder(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -81,21 +79,9 @@ class CNNAutoencoder(nn.Module):
 # 2.  SCORER ENGINE
 # ─────────────────────────────────────────────────────────────────────────────
 
-# BLUEPRINT 2: Z-Score Normalization Keys
 _REQUIRED_STAT_KEYS = {"ch_mean", "ch_std"}
 
-
 class ProjectBScorer:
-    """
-    Loads a trained CNNAutoencoder from a deployment folder and scores
-    individual .npy audio-feature files for anomalies using Pure MSE.
-
-    Deployment folder must contain:
-        cnn_ae_best.pth       — model weights
-        global_stats.json     — per-channel Z-score stats (ch_mean, ch_std)
-        threshold_B.txt       — decision threshold (first line)
-        scorer_config.json    — (Optional) runtime config: img_size, is_power_spec
-    """
 
     # ── construction ────────────────────────────────────────────────────────
 
@@ -113,13 +99,11 @@ class ProjectBScorer:
         else:
             self.device = torch.device(device)
             
-        # Heatmaps go here; defaults to <deployment>/heatmaps/
         self._output_dir = Path(output_dir) if output_dir else self._deployment / "heatmaps"
         self._output_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"🔧  Initialising scorer: {self._deployment.name}")
+        print(f"Initialising scorer: {self._deployment.name}")
 
-        # ── config (img_size, mel format) ───────────────────────────
         cfg_path = self._deployment / "scorer_config.json"
         if cfg_path.exists():
             with cfg_path.open() as f:
@@ -175,7 +159,7 @@ class ProjectBScorer:
             p.requires_grad_(False)
 
         print(
-            f"✅  Ready | threshold={self.threshold:.6f} | "
+            f"Ready | threshold={self.threshold:.6f} | "
             f"img={self.img_size}px | device={self.device}"
         )
 
@@ -216,7 +200,7 @@ class ProjectBScorer:
         delta  = librosa.feature.delta(db)
         delta2 = librosa.feature.delta(db, order=2)
 
-        # BLUEPRINT 2: Z-score Normalization (replaces min/max clipping)
+        # Z-score Normalization (replaces min/max clipping)
         db_norm     = (db - self.ch_mean[0]) / self.ch_std[0]
         delta_norm  = (delta - self.ch_mean[1]) / self.ch_std[1]
         delta2_norm = (delta2 - self.ch_mean[2]) / self.ch_std[2]
@@ -235,10 +219,6 @@ class ProjectBScorer:
         diff: np.ndarray,
         stem: str,
     ) -> Path:
-        """
-        Saves a pixel-wise reconstruction-error heatmap.
-        Uses a fresh Figure object (thread-safe; no global pyplot state).
-        """
         heatmap_path = self._output_dir / f"{stem}_heatmap.png"
         fig, ax = plt.subplots(figsize=(4, 4))
         try:
@@ -255,16 +235,13 @@ class ProjectBScorer:
         npy_path: str | os.PathLike,
         save_heatmap: bool = False,
     ) -> dict:
-        """
-        Score a single .npy sample using Hackathon Pure MSE.
-        """
+    
         tensor = self.preprocess(npy_path).to(self.device, non_blocking=True)
         
-        # BLUEPRINT 3: Mixed Precision for 2x Inference Speed
+        #Mixed Precision for 2x Inference Speed
         with torch.autocast(device_type=self.device.type, dtype=torch.float16, enabled=self.device.type == 'cuda'):
             recon = self._model(tensor)
             
-            # MATCH HACKATHON TRAINING LOGIC: Pure MSE
             score = F.mse_loss(recon, tensor).item()
 
         heatmap_path: Optional[Path] = None
@@ -293,7 +270,6 @@ class ProjectBScorer:
             for p in npy_paths
         ]
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 3.  CLI ENTRY POINT
 # ─────────────────────────────────────────────────────────────────────────────
@@ -301,12 +277,10 @@ class ProjectBScorer:
 if __name__ == "__main__":
     import sys
 
-    # Replace these paths if testing locally
     deployment_dir = r"C:\Users\risha\Downloads\listen\listen\edge_deployments\fan_id_00"
     test_file      = r"C:\Users\risha\Downloads\listen\listen\split_output\test\model_B\abnormal_sample.npy"
 
     try:
-        # device=None will automatically use GPU if CUDA is available
         scorer = ProjectBScorer(deployment_dir, device=None) 
     except Exception as e:
         print(f"Failed to initialize scorer: {e}", file=sys.stderr)

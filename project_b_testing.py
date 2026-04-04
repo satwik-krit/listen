@@ -21,20 +21,18 @@ RESULTS_DIR    = r"C:\Users\risha\Downloads\listen\listen\evaluation_results_B"
 
 CFG = {
     "img_size"   : 128,
-    "batch_size" : 64,  # Increased for faster inference with Mixed Precision
+    "batch_size" : 64,  
     "seed"       : 42,
 }
 
-# BLUEPRINT 1: Hardware Activation
+#Hardware Activation
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 torch.manual_seed(CFG["seed"])
 np.random.seed(CFG["seed"])
 os.makedirs(RESULTS_DIR, exist_ok=True)
-# ─────────────────────────────────────────────────────────────────────────────
 
-
-# ── Model (must match training exactly) ──────────────────────────────────────
+# ── Model──────────────────────────────────────
 
 class Encoder(nn.Module):
     def _block(self, in_ch, out_ch):
@@ -83,14 +81,13 @@ class CNNAutoencoder(nn.Module):
     def forward(self, x):
         return self.decoder(self.encoder(x))
 
-
 # ── Dataset ───────────────────────────────────────────────────────────────────
 
 class SplitMelDataset(Dataset):
     def __init__(self, X_mel: np.ndarray, global_stats: dict, img_size: int = 128):
         self.X        = X_mel
         self.img_size = img_size
-        # BLUEPRINT 2: Z-score logic instead of min-max clipping
+        # Z-score logic instead of min-max clipping
         self.ch_mean  = np.array(global_stats["ch_mean"], dtype=np.float32)
         self.ch_std   = np.array(global_stats["ch_std"], dtype=np.float32)
 
@@ -141,10 +138,7 @@ def group_by_machine(X_mel, y, meta):
 
 @torch.no_grad()
 def compute_scores(model, dataset, batch_size=64):
-    """
-    Supercharged Evaluation: Multiprocessing, Pinned Memory, Mixed Precision, 
-    and pure MSE to match the training threshold.
-    """
+
     num_workers = min(os.cpu_count() or 4, 8)
     loader = DataLoader(
         dataset, batch_size=batch_size, shuffle=False, 
@@ -235,9 +229,7 @@ def main():
     t0 = time.perf_counter()
 
     print()
-    print("╔══════════════════════════════════════════════════════════╗")
-    print("║       Model B — CNN AE Evaluation on Test Split          ║")
-    print("╚══════════════════════════════════════════════════════════╝")
+    print("       Model B — CNN AE Evaluation on Test Split          ")
     print(f"  Device     : {DEVICE}")
     print(f"  Split dir  : {SPLIT_DIR}")
     print(f"  Models dir : {DEPLOYMENT_DIR}")
@@ -245,18 +237,18 @@ def main():
     print()
 
     # ── Load test data ────────────────────────────────────────────────────────
-    print("[ 1 / 3 ]  Loading test split ...")
+    print("[ 1 / 3 ]  Loading test split ")
     X_mel_test, y_test, meta_test = load_test_split(SPLIT_DIR)
     print(f"           {len(y_test)} samples  shape={X_mel_test.shape}  "
           f"(normal={(y_test==0).sum()}, abnormal={(y_test==1).sum()})\n")
 
     # ── Group by machine ──────────────────────────────────────────────────────
-    print("[ 2 / 3 ]  Grouping by machine identity ...")
+    print("[ 2 / 3 ]  Grouping by machine identity ")
     groups = group_by_machine(X_mel_test, y_test, meta_test)
     print(f"           {len(groups)} machine-IDs in test set\n")
 
     # ── Evaluate ──────────────────────────────────────────────────────────────
-    print("[ 3 / 3 ]  Evaluating models ...\n")
+    print("[ 3 / 3 ]  Evaluating models \n")
 
     summary_rows = []
     header = (f"{'Machine':<20} {'N':>5} {'Nrm':>5} {'Abn':>5} "
@@ -269,14 +261,14 @@ def main():
 
         required = ["cnn_ae_best.pth", "global_stats.json", "threshold_B.txt"]
         if not all(os.path.exists(os.path.join(deploy_dir, f)) for f in required):
-            tqdm.write(f"  ⚠  {machine_name}: missing deployment files, skipping.")
+            tqdm.write(f"  {machine_name}: missing deployment files, skipping.")
             continue
 
         indices = groups[machine_name]["indices"]
         y       = groups[machine_name]["y"]
 
         if len(np.unique(y)) < 2:
-            tqdm.write(f"  ⚠  {machine_name}: only one class in test set, skipping.")
+            tqdm.write(f"  {machine_name}: only one class in test set, skipping.")
             continue
 
         # Load artefacts
@@ -360,7 +352,7 @@ def main():
         if DEVICE.type == "cuda":
             torch.cuda.empty_cache()
 
-    # ── Summary ───────────────────────────────────────────────────────────────
+    # ── OutPut ───────────────────────────────────────────────────────────────
     print("\n" + "─" * len(header))
     if summary_rows:
         aucs = [r["auc"] for r in summary_rows if not np.isnan(r["auc"])]
@@ -381,9 +373,7 @@ def main():
 
     elapsed = time.perf_counter() - t0
     print()
-    print("╔══════════════════════════════════════════════════════════╗")
-    print(f"║  Evaluation complete. {len(summary_rows)} models evaluated in {elapsed/60:.1f} min.")
-    print("╚══════════════════════════════════════════════════════════╝")
+    print(f"Evaluation complete. {len(summary_rows)} models evaluated in {elapsed/60:.1f} min.")
     print()
 
 

@@ -1,34 +1,3 @@
-"""
-Model A — Noise-Agnostic Edge Autoencoder Trainer
-==================================================
-Loads directly from split_output produced by split_dataset.py:
-
-  split_output/
-    train/
-      model_A/
-        X.npy        (N_train, 8)   <- 8 scalar audio features
-        y.npy        (N_train,)     <- 0=normal, 1=abnormal
-        meta.txt
-    test/
-      model_A/
-        X.npy        (N_test,  8)
-        y.npy        (N_test,)
-
-Training is done on NORMAL samples only (unsupervised anomaly detection).
-Anomaly score = reconstruction MSE.  Threshold = 99th percentile on val set.
-
-Output per machine-id:
-  edge_deployments/{machine}_{id}/
-    edge_ae_best.pth
-    edge_ae.onnx
-    scaler.pkl
-    scaler_params.json
-    threshold.txt
-    train_curve.png
-
-Requirements:
-  pip install numpy torch scikit-learn matplotlib onnx tqdm
-"""
 
 import os
 import json

@@ -1,27 +1,3 @@
-"""
-MIMII Dataset Splitter  —  Optimized for i7-14650HX + 32 GB RAM
-================================================================
-Splits processed_features into train/ and test/ folder structures.
-
-Output layout:
-  split_output/
-    train/
-      model_A/
-        X.npy          (n_train, 8)
-        y.npy          (n_train,)
-        meta.txt
-      model_B/
-        X_scalar.npy   (n_train, 8)
-        X_mel.npy      (n_train, 1, 128, T)
-        y.npy          (n_train,)
-        meta.txt
-    test/
-      model_A/  ... same structure ...
-      model_B/  ... same structure ...
-
-Requirements:
-  pip install numpy scikit-learn tqdm
-"""
 
 import os
 import sys
@@ -37,10 +13,6 @@ OUTPUT_ROOT = r"C:\Users\risha\Downloads\listen\listen\split_output"
 TEST_SIZE   = 0.2
 RANDOM_SEED = 42
 STRATIFY    = True
-
-# i7-14650HX: 8P + 8E cores = 16 cores / 24 threads.
-# IO-bound disk reads benefit from more threads than physical cores.
-# 14 threads keeps 2 threads free for OS + UI.
 NUM_WORKERS = 14
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -84,7 +56,7 @@ def discover_samples(base_dir):
     return samples
 
 
-# ── Step 2: Load (threaded) ───────────────────────────────────────────────────
+# ── Step 2: Load ───────────────────────────────────────────────────
 
 def load_one(sample):
     """Load a single (audio, mel) pair. Runs in a worker thread."""
@@ -96,14 +68,9 @@ def load_one(sample):
             f"Expected 8 audio features, got {audio.shape[0]}: {sample['audio_path']}"
         )
 
-    # Normalise mel to (C, 128, T) — preserve however many channels exist.
-    # Saved as (128, T)        → add channel dim → (1, 128, T)
-    # Saved as (C, 128, T)    → already correct  (C can be 1 or 3)
-    # Saved as (128, T, C)    → transpose        → (C, 128, T)
     if mel.ndim == 2:
         mel = mel[np.newaxis, :, :]                    # (128,T) -> (1,128,T)
     elif mel.ndim == 3:
-        # Distinguish (C,128,T) from (128,T,C) by checking which axis is 128
         if mel.shape[1] == 128:
             pass                                       # already (C, 128, T)
         elif mel.shape[0] == 128:
@@ -114,15 +81,7 @@ def load_one(sample):
 
 
 def load_all_parallel(samples):
-    """
-    Load all samples in parallel using ThreadPoolExecutor.
-
-    Returns audio/label/meta lists immediately, but for mel we only return
-    the shapes so we can pre-allocate before touching the data again.
-    mel arrays are stored temporarily in results[] and consumed one-by-one
-    in build_arrays — they are never all live in RAM simultaneously beyond
-    the brief window while futures are in-flight.
-    """
+    
     results = [None] * len(samples)
     skipped = 0
 
@@ -145,10 +104,9 @@ def load_all_parallel(samples):
                     skipped += 1
                 pbar.update(1)
 
-    # Separate into lightweight lists; keep mel inside results[] for now
-    # so we don't hold two copies (results + mel_list) simultaneously.
+
     audio_list, labels, meta_list = [], [], []
-    valid_indices = []                    # positions in results[] that succeeded
+    valid_indices = []                    
     for i, r in enumerate(results):
         if r is None:
             continue
@@ -161,7 +119,7 @@ def load_all_parallel(samples):
     return audio_list, labels, meta_list, valid_indices, results, skipped
 
 
-# ── Step 3: Pre-allocate + fill in-place (zero extra copies) ─────────────────
+# ── Step 3: Pre-allocate + fill in-place─────────────────
 
 def build_arrays(audio_list, labels, valid_indices, results):
     """
@@ -258,17 +216,15 @@ def main():
     t0 = time.perf_counter()
 
     print()
-    print("╔══════════════════════════════════════════════════════════╗")
-    print("║          MIMII Dataset Splitter  (14650HX build)        ║")
-    print("╚══════════════════════════════════════════════════════════╝")
+    print("       MIMII Dataset Splitter       ")
     print(f"  Source  : {BASE_DIR}")
     print(f"  Output  : {OUTPUT_ROOT}")
     print(f"  Split   : {int((1-TEST_SIZE)*100)}/{int(TEST_SIZE*100)} train/test  "
-          f"|  Workers: {NUM_WORKERS}  |  Seed: {RANDOM_SEED}")
+          f"Workers: {NUM_WORKERS}   Seed: {RANDOM_SEED}")
     print()
 
     # ── 1. Discover ──────────────────────────────────────────────────────────
-    print("[ 1 / 4 ]  Discovering samples ...")
+    print("[ 1 / 4 ]  Discovering samples ")
     samples = discover_samples(BASE_DIR)
     if not samples:
         print("  ERROR: No samples found. Check BASE_DIR.")
@@ -276,22 +232,22 @@ def main():
     print(f"           Found {len(samples)} sample pairs.\n")
 
     # ── 2. Load ──────────────────────────────────────────────────────────────
-    print(f"[ 2 / 4 ]  Loading with {NUM_WORKERS} threads ...")
+    print(f"[ 2 / 4 ]  Loading with {NUM_WORKERS} threads")
     audio_list, labels, meta_list, valid_indices, results, skipped = load_all_parallel(samples)
     N = len(audio_list)
     print(f"\n           Loaded {N} samples  ({skipped} skipped)\n")
 
     # ── 3. Stack (memory-safe: pre-allocate + write in-place) ────────────────
-    print("[ 3 / 4 ]  Building arrays (zero-copy mel stacking) ...")
+    print("[ 3 / 4 ]  Building arrays (zero-copy mel stacking) ")
     X_scalar, X_mel, y = build_arrays(audio_list, labels, valid_indices, results)
-    del audio_list, results  # results[] is already cleared inside build_arrays
+    del audio_list, results 
 
     print(f"\n  X_scalar : {X_scalar.shape}   dtype={X_scalar.dtype}")
     print(f"  X_mel    : {X_mel.shape}   dtype={X_mel.dtype}")
     print(f"  Normal   : {(y==0).sum()}    Abnormal : {(y==1).sum()}\n")
 
     # ── 4. Split + save ──────────────────────────────────────────────────────
-    print("[ 4 / 4 ]  Splitting and saving ...")
+    print("[ 4 / 4 ]  Splitting and saving ")
     indices = np.arange(N)
     idx_train, idx_test = train_test_split(
         indices,

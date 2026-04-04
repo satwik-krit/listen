@@ -1,0 +1,11 @@
+Confusion Matrix — slider_id_04 (Model B)
+Rows=Actual  Cols=Predicted  [Normal=0, Abnormal=1]
+
+              Pred Normal  Pred Abnormal
+True Normal           306              0
+True Abnormal         113              0
+
+TN=306  FP=0  FN=113  TP=0
+
+AUC=0.4788  Acc=0.7303  Prec=0.0000  Rec=0.0000  F1=0.0000
+Threshold used: 1.03694663

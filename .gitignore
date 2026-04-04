@@ -1,3 +1,17 @@
+# CUSTOM
+probe/
+raw_data/
+scalers/
+processed_features/
+cwru/
+test*.py
+=======
+processed_features/
+scalers/
+raw_data/
+split_output/
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

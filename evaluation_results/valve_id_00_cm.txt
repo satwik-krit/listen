@@ -1,0 +1,11 @@
+Confusion Matrix — valve_id_00
+Rows=Actual  Cols=Predicted  [Normal, Abnormal]
+
+              Pred Normal  Pred Abnormal
+True Normal           594             10
+True Abnormal          55             11
+
+TN=594  FP=10  FN=55  TP=11
+
+AUC=0.9459  Acc=0.9030  Prec=0.5238  Rec=0.1667  F1=0.2529
+Threshold used: 0.53407413

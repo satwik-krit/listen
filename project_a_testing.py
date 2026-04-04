@@ -1,23 +1,3 @@
-"""
-Model A — Edge Autoencoder Evaluation Script
-============================================
-Loads the test split produced by split_dataset.py and evaluates every
-trained model from edge_deployments/.
-
-For each machine-id it reports:
-  • AUC-ROC
-  • Accuracy, Precision, Recall, F1  (at the 99th-percentile threshold)
-  • Confusion matrix
-  • Per-sample MSE histogram (saved as PNG)
-
-A final summary table is printed and saved to results_summary.csv.
-
-Usage:
-  python test_model_A.py
-
-Requirements:
-  pip install numpy torch scikit-learn matplotlib tqdm
-"""
 
 import os
 import json

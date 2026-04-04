@@ -1,0 +1,11 @@
+Confusion Matrix — pump_id_02 (Model B)
+Rows=Actual  Cols=Predicted  [Normal=0, Abnormal=1]
+
+              Pred Normal  Pred Abnormal
+True Normal           648              0
+True Abnormal          62              0
+
+TN=648  FP=0  FN=62  TP=0
+
+AUC=0.4070  Acc=0.9127  Prec=0.0000  Rec=0.0000  F1=0.0000
+Threshold used: 1.20795650

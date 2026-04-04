@@ -1,21 +1,3 @@
-"""
-Model B — CNN Autoencoder Evaluation Script
-============================================
-Loads the test split from split_output/test/model_B/ and evaluates every
-trained CNN model from edge_deployments/.
-
-Per machine-id reports:
-  • AUC-ROC
-  • Accuracy, Precision, Recall, F1  (at trained threshold)
-  • Confusion matrix text file
-  • 3-panel PNG: score distribution + ROC curve + example reconstruction heatmap
-
-Final summary saved to evaluation_results_B/results_summary_B.csv
-
-Requirements:
-  pip install numpy torch pytorch-msssim scikit-learn matplotlib tqdm
-"""
-
 import os
 import json
 import time
@@ -24,7 +6,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
-from pytorch_msssim import ssim
 from sklearn.metrics import (
     roc_auc_score, accuracy_score, precision_score,
     recall_score, f1_score, confusion_matrix, roc_curve,
@@ -40,12 +21,13 @@ RESULTS_DIR    = r"C:\Users\risha\Downloads\listen\listen\evaluation_results_B"
 
 CFG = {
     "img_size"   : 128,
-    "batch_size" : 16,
-    "loss_alpha" : 0.5,
+    "batch_size" : 64,  # Increased for faster inference with Mixed Precision
     "seed"       : 42,
 }
 
+# BLUEPRINT 1: Hardware Activation
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 torch.manual_seed(CFG["seed"])
 np.random.seed(CFG["seed"])
 os.makedirs(RESULTS_DIR, exist_ok=True)
@@ -102,23 +84,15 @@ class CNNAutoencoder(nn.Module):
         return self.decoder(self.encoder(x))
 
 
-# ── Loss (same as training) ───────────────────────────────────────────────────
-
-def combined_loss_per_sample(recon, original, alpha=CFG["loss_alpha"]):
-    """Returns a scalar loss for a single (1, 3, H, W) pair."""
-    mse      = F.mse_loss(recon, original)
-    ssim_val = ssim(recon, original, data_range=1.0, size_average=False).mean()
-    return (alpha * mse + (1.0 - alpha) * (1.0 - ssim_val)).item()
-
-
 # ── Dataset ───────────────────────────────────────────────────────────────────
 
 class SplitMelDataset(Dataset):
     def __init__(self, X_mel: np.ndarray, global_stats: dict, img_size: int = 128):
         self.X        = X_mel
         self.img_size = img_size
-        self.ch_min   = np.array(global_stats["ch_min"], dtype=np.float32)
-        self.ch_max   = np.array(global_stats["ch_max"], dtype=np.float32)
+        # BLUEPRINT 2: Z-score logic instead of min-max clipping
+        self.ch_mean  = np.array(global_stats["ch_mean"], dtype=np.float32)
+        self.ch_std   = np.array(global_stats["ch_std"], dtype=np.float32)
 
     def __len__(self):
         return len(self.X)
@@ -126,8 +100,9 @@ class SplitMelDataset(Dataset):
     def __getitem__(self, idx):
         mel = self.X[idx].copy()
         for c in range(3):
-            rng = self.ch_max[c] - self.ch_min[c] + 1e-8
-            mel[c] = np.clip((mel[c] - self.ch_min[c]) / rng, 0.0, 1.0)
+            # Apply Z-score standardization
+            mel[c] = (mel[c] - self.ch_mean[c]) / self.ch_std[c]
+            
         t = torch.from_numpy(mel).unsqueeze(0)
         t = F.interpolate(t, size=(self.img_size, self.img_size),
                           mode="bilinear", align_corners=False)
@@ -144,14 +119,12 @@ def load_test_split(split_dir: str):
         meta = [l.strip() for l in f]
     return X_mel, y, meta
 
-
 def parse_machine_id(meta_entry: str):
     parts        = meta_entry.split("|")
     snr_machine  = parts[0]
     machine_id   = parts[1]
     machine_type = snr_machine.split("_dB_")[-1] if "_dB_" in snr_machine else snr_machine
     return machine_type, machine_id
-
 
 def group_by_machine(X_mel, y, meta):
     groups = {}
@@ -166,33 +139,42 @@ def group_by_machine(X_mel, y, meta):
         groups[key]["y"] = np.array(groups[key]["y"], dtype=np.int32)
     return groups
 
-
 @torch.no_grad()
-def compute_scores(model, dataset, batch_size=16):
+def compute_scores(model, dataset, batch_size=64):
     """
-    Returns per-sample anomaly scores and reconstruction heatmap for
-    the first sample (for visualisation).
+    Supercharged Evaluation: Multiprocessing, Pinned Memory, Mixed Precision, 
+    and pure MSE to match the training threshold.
     """
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0)
+    num_workers = min(os.cpu_count() or 4, 8)
+    loader = DataLoader(
+        dataset, batch_size=batch_size, shuffle=False, 
+        num_workers=num_workers, pin_memory=True
+    )
+    
     scores  = []
     first_heatmap = None
+    first_original = None
+    first_recon = None
 
     model.eval()
     for batch_idx, batch in enumerate(loader):
-        batch = batch.to(DEVICE)
-        recon = model(batch)
+        batch = batch.to(DEVICE, non_blocking=True)
+        
+        # BLUEPRINT 3: Mixed Precision for 2x Inference Speed
+        with torch.autocast(device_type=DEVICE.type, dtype=torch.float16, enabled=DEVICE.type == 'cuda'):
+            recon = model(batch)
+            # Fast Loss matching the training script (pure MSE)
+            mse = F.mse_loss(recon, batch, reduction='none').mean(dim=[1, 2, 3])
 
-        # per-sample combined loss
-        for i in range(len(batch)):
-            s = combined_loss_per_sample(recon[i:i+1], batch[i:i+1])
-            scores.append(s)
+        scores.extend(mse.cpu().numpy().tolist())
 
         # grab heatmap from very first sample for the plot
         if first_heatmap is None:
-            err = ((batch[0] - recon[0]) ** 2).mean(dim=0)   # (H, W)
+            # Cast back to float32 to ensure heatmap accuracy
+            err = ((batch[0].float() - recon[0].float()) ** 2).mean(dim=0)
             first_heatmap = err.cpu().numpy()
-            first_original = batch[0].cpu().numpy()           # (3, H, W)
-            first_recon    = recon[0].cpu().numpy()
+            first_original = batch[0].float().cpu().numpy()
+            first_recon    = recon[0].float().cpu().numpy()
 
     return np.array(scores), first_heatmap, first_original, first_recon
 
@@ -215,7 +197,7 @@ def plot_results(machine_name, scores, y_true, threshold,
     ax1.axvline(threshold, color="black", linewidth=1.5, linestyle="--",
                 label=f"Thr ({threshold:.4f})")
     ax1.set_title("Score Distribution")
-    ax1.set_xlabel("Combined Loss")
+    ax1.set_xlabel("Reconstruction MSE")
     ax1.legend(fontsize=7)
     ax1.grid(True, alpha=0.3)
 
@@ -254,7 +236,7 @@ def main():
 
     print()
     print("╔══════════════════════════════════════════════════════════╗")
-    print("║       Model B — CNN AE Evaluation on Test Split         ║")
+    print("║       Model B — CNN AE Evaluation on Test Split          ║")
     print("╚══════════════════════════════════════════════════════════╝")
     print(f"  Device     : {DEVICE}")
     print(f"  Split dir  : {SPLIT_DIR}")

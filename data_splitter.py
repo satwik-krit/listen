@@ -1,27 +1,3 @@
-"""
-MIMII Dataset Splitter  —  Optimized for i7-14650HX + 32 GB RAM
-================================================================
-Splits processed_features into train/ and test/ folder structures.
-
-Output layout:
-  split_output/
-    train/
-      model_A/
-        X.npy          (n_train, 8)
-        y.npy          (n_train,)
-        meta.txt
-      model_B/
-        X_scalar.npy   (n_train, 8)
-        X_mel.npy      (n_train, 1, 128, T)
-        y.npy          (n_train,)
-        meta.txt
-    test/
-      model_A/  ... same structure ...
-      model_B/  ... same structure ...
-
-Requirements:
-  pip install numpy scikit-learn tqdm
-"""
 
 import os
 import sys

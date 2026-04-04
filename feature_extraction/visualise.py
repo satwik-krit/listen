@@ -7,21 +7,22 @@ import soundfile
 import joblib
 
 
-def plot_difference_mel_spectrogram(file1, file2, input_dir):
+def plot_difference_mel_spectrogram(file1, file2, input_dir, remove_noise=True):
     y1, _ = librosa.load(file1, sr=config.SAMPLING_RATE)
     y2, _ = librosa.load(file2, sr=config.SAMPLING_RATE)
 
     master_noise = joblib.load(config.SCALER_DIRS[0] / "master_noise.pkl")
 
-    y1 = remove_background_noise(y1, config.SAMPLING_RATE, master_noise)
-    y2 = remove_background_noise(y2, config.SAMPLING_RATE, master_noise)
+    if remove_noise:
+        y1 = remove_background_noise(y1, config.SAMPLING_RATE, master_noise)
+        y2 = remove_background_noise(y2, config.SAMPLING_RATE, master_noise)
 
     # We don't necessarily need the strict scaler just to visualize the mel
     mel1 = process_log_mel_spectrogram(y1, sr=config.SAMPLING_RATE)
     mel2 = process_log_mel_spectrogram(y2, sr=config.SAMPLING_RATE)
 
     plt.title(
-        f"Difference Mel Spectrogram: {file1.relative_to(input_dir)} and {file2.relative_to(input_dir)}"
+        f"Difference Mel Spectrogram: {file1.relative_to(input_dir)} - {file2.relative_to(input_dir)}"
     )
     librosa.display.specshow(
         mel1 - mel2, x_axis="time", y_axis="mel", sr=config.SAMPLING_RATE

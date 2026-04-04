@@ -1,0 +1,14 @@
+{
+  "ch0": {
+    "min": Infinity,
+    "max": -Infinity
+  },
+  "ch1": {
+    "min": Infinity,
+    "max": -Infinity
+  },
+  "ch2": {
+    "min": Infinity,
+    "max": -Infinity
+  }
+}

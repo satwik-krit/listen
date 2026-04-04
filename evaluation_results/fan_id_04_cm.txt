@@ -1,0 +1,11 @@
+Confusion Matrix — fan_id_04
+Rows=Actual  Cols=Predicted  [Normal, Abnormal]
+
+              Pred Normal  Pred Abnormal
+True Normal           611              2
+True Abnormal         202              0
+
+TN=611  FP=2  FN=202  TP=0
+
+AUC=0.5924  Acc=0.7497  Prec=0.0000  Rec=0.0000  F1=0.0000
+Threshold used: 1.35979593

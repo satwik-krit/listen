@@ -12,7 +12,7 @@ raw_data/
     {machine_type}/              e.g. fan
       id_{XX}/                   e.g. id_00
         normal/
-          00000000.wav … 
+          00000000.wav …
         abnormal/
           00000000.wav …
 
@@ -47,11 +47,11 @@ import requests
 # CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 
-SERVER_URL    = "http://localhost:8000/upload_audio"
-RAW_DATA_DIR  = Path(__file__).resolve().parent.parent / "raw_data"
+SERVER_URL = "http://localhost:8000/upload_audio"
+RAW_DATA_DIR = Path(__file__).resolve().parent.parent / "raw_data"
 
-VALID_TYPES   = {"fan", "pump", "slider", "valve"}
-VALID_IDS     = {"00", "02", "04", "06"}
+VALID_TYPES = {"fan", "pump", "slider", "valve"}
+VALID_IDS = {"00", "02", "04", "06"}
 
 # Valve has no id_06 in the classifier output space — keep consistent
 VALVE_VALID_IDS = {"00", "02", "04"}
@@ -59,7 +59,7 @@ VALVE_VALID_IDS = {"00", "02", "04"}
 # Edge nodes stream 8-feature models; GPU nodes stream 3-ch Mel models.
 # We alternate assignments so the dashboard shows both node types.
 _NODE_COUNTER = 0
-_LOCK         = threading.Lock()
+_LOCK = threading.Lock()
 
 
 def _next_project() -> str:
@@ -73,6 +73,7 @@ def _next_project() -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # DATASET DISCOVERY
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def discover_machines(raw_data: Path, filter_type: Optional[str] = None) -> list[dict]:
     """
@@ -116,24 +117,34 @@ def discover_machines(raw_data: Path, filter_type: Optional[str] = None) -> list
             if machine_type == "valve" and machine_id not in VALVE_VALID_IDS:
                 continue
 
-            normal_files   = sorted((id_dir / "normal").glob("*.wav")) \
-                             if (id_dir / "normal").exists() else []
-            abnormal_files = sorted((id_dir / "abnormal").glob("*.wav")) \
-                             if (id_dir / "abnormal").exists() else []
+            normal_files = (
+                sorted((id_dir / "normal").glob("*.wav"))
+                if (id_dir / "normal").exists()
+                else []
+            )
+            abnormal_files = (
+                sorted((id_dir / "abnormal").glob("*.wav"))
+                if (id_dir / "abnormal").exists()
+                else []
+            )
 
             if not normal_files and not abnormal_files:
                 continue
 
-            machines.append({
-                "machine_type": machine_type,
-                "machine_id":   machine_id,
-                "normal":       normal_files,
-                "abnormal":     abnormal_files,
-                "snr":          snr_dir.name,
-            })
-            print(f"  [FOUND] {machine_type}/id_{machine_id} "
-                  f"({len(normal_files)} normal, {len(abnormal_files)} abnormal) "
-                  f"[{snr_dir.name}]")
+            machines.append(
+                {
+                    "machine_type": machine_type,
+                    "machine_id": machine_id,
+                    "normal": normal_files,
+                    "abnormal": abnormal_files,
+                    "snr": snr_dir.name,
+                }
+            )
+            print(
+                f"  [FOUND] {machine_type}/id_{machine_id} "
+                f"({len(normal_files)} normal, {len(abnormal_files)} abnormal) "
+                f"[{snr_dir.name}]"
+            )
 
     return machines
 
@@ -142,17 +153,20 @@ def discover_machines(raw_data: Path, filter_type: Optional[str] = None) -> list
 # DUMMY WAV (fallback when no raw_data exists)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _make_dummy_wav(path: Path, machine_type: str = "valve", anomaly: bool = False):
     """Generate a synthetic WAV using only the stdlib — no librosa needed."""
     import wave, struct, math
 
     sample_rate = 16_000
-    duration    = 2
-    n_samples   = sample_rate * duration
+    duration = 2
+    n_samples = sample_rate * duration
 
     # Fundamental tone + harmonics to make it machine-like
-    base_freq   = {"fan": 120.0, "pump": 80.0, "slider": 200.0, "valve": 160.0}.get(machine_type, 160.0)
-    harmonics   = [1.0, 0.5, 0.25, 0.125]
+    base_freq = {"fan": 120.0, "pump": 80.0, "slider": 200.0, "valve": 160.0}.get(
+        machine_type, 160.0
+    )
+    harmonics = [1.0, 0.5, 0.25, 0.125]
 
     if anomaly:
         # Add high-frequency noise burst to simulate a fault
@@ -164,7 +178,7 @@ def _make_dummy_wav(path: Path, machine_type: str = "valve", anomaly: bool = Fal
         wf.setsampwidth(2)
         wf.setframerate(sample_rate)
         for i in range(n_samples):
-            t     = i / sample_rate
+            t = i / sample_rate
             value = sum(
                 amp * math.sin(2 * math.pi * (n + 1) * base_freq * t)
                 for n, amp in enumerate(harmonics)
@@ -180,6 +194,7 @@ def _make_dummy_wav(path: Path, machine_type: str = "valve", anomaly: bool = Fal
 # VIRTUAL NODE (one per machine instance)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class VirtualNode(threading.Thread):
     """
     A background thread that continuously streams WAV files for one
@@ -188,34 +203,33 @@ class VirtualNode(threading.Thread):
 
     def __init__(
         self,
-        node_id:      str,
-        project_id:   str,
+        node_id: str,
+        project_id: str,
         machine_type: str,
-        machine_id:   str,
+        machine_id: str,
         normal_files: list[Path],
         abnormal_files: list[Path],
         anomaly_rate: float = 0.1,
-        interval:     float = 5.0,
-        jitter:       float = 1.5,
+        interval: float = 5.0,
+        jitter: float = 1.5,
     ):
         super().__init__(daemon=True, name=f"Node-{node_id}")
-        self.node_id       = node_id
-        self.project_id    = project_id
-        self.machine_type  = machine_type
-        self.machine_id    = machine_id
-        self.normal_files  = normal_files
-        self.abnormal_files= abnormal_files
-        self.anomaly_rate  = anomaly_rate
-        self.interval      = interval
-        self.jitter        = jitter
-        self._sent         = 0
-        self._errors       = 0
+        self.node_id = node_id
+        self.project_id = project_id
+        self.machine_type = machine_type
+        self.machine_id = machine_id
+        self.normal_files = normal_files
+        self.abnormal_files = abnormal_files
+        self.anomaly_rate = anomaly_rate
+        self.interval = interval
+        self.jitter = jitter
+        self._sent = 0
+        self._errors = 0
 
     def _pick_file(self) -> tuple[Path, bool]:
         """Choose a file to send; returns (path, is_anomaly)."""
-        inject_anomaly = (
-            random.random() < self.anomaly_rate
-            and bool(self.abnormal_files)
+        inject_anomaly = random.random() < self.anomaly_rate and bool(
+            self.abnormal_files
         )
         if inject_anomaly:
             return random.choice(self.abnormal_files), True
@@ -244,8 +258,8 @@ class VirtualNode(threading.Thread):
         while True:
             try:
                 wav_path, is_anomaly = self._pick_file()
-                tag   = "⚠ ANOMALY" if is_anomaly else "  normal "
-                code  = self._post(wav_path)
+                tag = "⚠ ANOMALY" if is_anomaly else "  normal "
+                code = self._post(wav_path)
                 self._sent += 1
                 print(
                     f"[{time.strftime('%H:%M:%S')}] "
@@ -256,8 +270,10 @@ class VirtualNode(threading.Thread):
             except requests.exceptions.ConnectionError:
                 self._errors += 1
                 if self._errors == 1:
-                    print(f"[ERROR] {self.node_id}: Backend offline — "
-                          "start Uvicorn with: uvicorn server.app:app --reload")
+                    print(
+                        f"[ERROR] {self.node_id}: Backend offline — "
+                        "start Uvicorn with: uvicorn server.app:app --reload"
+                    )
             except Exception as e:
                 self._errors += 1
                 print(f"[ERROR] {self.node_id}: {e.__class__.__name__}: {e}")
@@ -270,6 +286,7 @@ class VirtualNode(threading.Thread):
 # DUMMY-MODE NODE (when raw_data doesn't exist)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class DummyNode(VirtualNode):
     """Falls back to synthesised WAV files when no dataset is present."""
 
@@ -278,7 +295,10 @@ class DummyNode(VirtualNode):
     def _pick_file(self) -> tuple[Path, bool]:
         self._TMP.mkdir(exist_ok=True)
         inject = random.random() < self.anomaly_rate
-        fname  = self._TMP / f"{self.machine_type}_{self.machine_id}_{'ab' if inject else 'n'}.wav"
+        fname = (
+            self._TMP
+            / f"{self.machine_type}_{self.machine_id}_{'ab' if inject else 'n'}.wav"
+        )
         if not fname.exists():
             _make_dummy_wav(fname, self.machine_type, anomaly=inject)
         return fname, inject
@@ -288,20 +308,34 @@ class DummyNode(VirtualNode):
 # ENTRY POINT
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="L.I.S.T.E.N. — MIMII Dataset Edge Node Streamer"
     )
-    parser.add_argument("--raw_data",    default=str(RAW_DATA_DIR),
-                        help="Path to raw_data/ directory")
-    parser.add_argument("--type",        default=None,
-                        help="Filter to one machine type (fan|pump|slider|valve)")
-    parser.add_argument("--anomaly_rate",type=float, default=0.12,
-                        help="Fraction of sends that inject an abnormal file (0-1)")
-    parser.add_argument("--interval",    type=float, default=6.0,
-                        help="Seconds between sends per node")
-    parser.add_argument("--max_nodes",   type=int,   default=8,
-                        help="Maximum number of concurrent virtual nodes")
+    parser.add_argument(
+        "--raw_data", default=str(RAW_DATA_DIR), help="Path to raw_data/ directory"
+    )
+    parser.add_argument(
+        "--type",
+        default=None,
+        help="Filter to one machine type (fan|pump|slider|valve)",
+    )
+    parser.add_argument(
+        "--anomaly_rate",
+        type=float,
+        default=0.12,
+        help="Fraction of sends that inject an abnormal file (0-1)",
+    )
+    parser.add_argument(
+        "--interval", type=float, default=6.0, help="Seconds between sends per node"
+    )
+    parser.add_argument(
+        "--max_nodes",
+        type=int,
+        default=8,
+        help="Maximum number of concurrent virtual nodes",
+    )
     args = parser.parse_args()
 
     raw_data = Path(args.raw_data)
@@ -316,66 +350,57 @@ def main():
     machines = discover_machines(raw_data, filter_type=args.type)
 
     if not machines:
-        print("[WARN] No MIMII files found — running in DUMMY mode.")
-        print("       Place your MIMII dataset at raw_data/ to use real audio.\n")
+        print("[ERROR] No MIMII files found in the raw_data/ directory!")
+        print("\tPlease download and extract the real MIMII dataset into raw_data/.")
+        print("\tExiting streamer...")
+        sys.exit(1)
 
-        # Spawn one dummy node per machine type × 2 IDs
-        dummy_machines = [
-            ("fan",    "00"), ("fan",    "02"),
-            ("pump",   "00"), ("pump",   "02"),
-            ("slider", "00"), ("valve",  "00"),
-        ]
-        for mtype, mid in dummy_machines[:args.max_nodes]:
-            proj    = _next_project()
-            node_id = f"node_{mtype}_{mid}_{proj[:1]}"
-            node    = DummyNode(
-                node_id      = node_id,
-                project_id   = proj,
-                machine_type = mtype,
-                machine_id   = mid,
-                normal_files = [],
-                abnormal_files=[],
-                anomaly_rate = args.anomaly_rate,
-                interval     = args.interval,
-            )
-            node.start()
-            print(f"  [DUMMY] {node_id}  [{proj.upper()}]  {mtype}/id_{mid}")
+        # If we made it here, we have real data! Limit to max_nodes and shuffle.
+        random.shuffle(machines)
+        selected = machines[: args.max_nodes]
+        nodes = []
+
     else:
         # Limit to max_nodes, shuffle so we get variety
         random.shuffle(machines)
-        selected = machines[:args.max_nodes]
-        nodes    = []
+        selected = machines[: args.max_nodes]
+        nodes = []
 
         for m in selected:
-            proj    = _next_project()
+            proj = _next_project()
             node_id = f"node_{m['machine_type']}_{m['machine_id']}_{proj[:1]}"
             NodeCls = VirtualNode
 
             node = NodeCls(
-                node_id       = node_id,
-                project_id    = proj,
-                machine_type  = m["machine_type"],
-                machine_id    = m["machine_id"],
-                normal_files  = m["normal"],
-                abnormal_files= m["abnormal"],
-                anomaly_rate  = args.anomaly_rate,
-                interval      = args.interval,
+                node_id=node_id,
+                project_id=proj,
+                machine_type=m["machine_type"],
+                machine_id=m["machine_id"],
+                normal_files=m["normal"],
+                abnormal_files=m["abnormal"],
+                anomaly_rate=args.anomaly_rate,
+                interval=args.interval,
             )
             node.start()
             nodes.append(node)
-            print(f"  [NODE] {node_id:<24} [{proj.upper()}]  "
-                  f"{m['machine_type']}/id_{m['machine_id']}  "
-                  f"({len(m['normal'])} normal, {len(m['abnormal'])} abnormal)")
+            print(
+                f"  [NODE] {node_id:<24} [{proj.upper()}]  "
+                f"{m['machine_type']}/id_{m['machine_id']}  "
+                f"({len(m['normal'])} normal, {len(m['abnormal'])} abnormal)"
+            )
 
-    print(f"\n  {len(machines) if machines else 'DUMMY'} nodes streaming — Ctrl+C to stop\n")
+    print(
+        f"\n  {len(machines) if machines else 'DUMMY'} nodes streaming — Ctrl+C to stop\n"
+    )
 
     # Keep the main thread alive; threads are daemons so they auto-exit
     try:
         while True:
             time.sleep(30)
             active = threading.active_count() - 1
-            print(f"[STATUS] {active} nodes active | "
-                  f"time={time.strftime('%H:%M:%S')}")
+            print(
+                f"[STATUS] {active} nodes active | " f"time={time.strftime('%H:%M:%S')}"
+            )
     except KeyboardInterrupt:
         print("\n[EXIT] Streamer stopped.")
         sys.exit(0)

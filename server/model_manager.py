@@ -457,10 +457,8 @@ class ModelManager:
             try:
                 machine_type, machine_id = self._classify(audio_features)
             except Exception as ce:
-                # Classifier failure → fall back to reported type, id_00
-                print(f"[WARN] Classifier failed: {ce} — using reported type")
-                machine_type = reported_node_type.lower()
-                machine_id = "00"
+                # STRICT MODE: If the classifier fails, halt the pipeline and return the exact error.
+                return {"error": f"Classifier failed to identify machine: {ce}"}
             print(
                 f"[PIPELINE] Classified → {machine_type} id_{machine_id}  [{project_id.upper()}]"
             )

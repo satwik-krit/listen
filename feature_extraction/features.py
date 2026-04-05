@@ -4,7 +4,7 @@ import librosa
 from sklearn.preprocessing import MinMaxScaler
 import warnings
 
-import config
+import config as config
 
 
 def get_normal_baseline(normal_files):
@@ -59,17 +59,21 @@ def process_delta(series, scaler_delta, order=1):
     return d_scaled.reshape(d.shape)
 
 
-def process_file(file_path, scaler_mel, scaler_delta, scaler_delta2, master_noise):
+def process_file(
+    file_path, scaler_mel, scaler_delta, scaler_delta2, master_noise, no_mel=False
+):
     y, sr = librosa.load(file_path, sr=config.SAMPLING_RATE)
     y = remove_background_noise(y, sr, master_noise)
-    norm_mel = process_log_mel_spectrogram(y, sr, scaler_mel)
-    delta_spectrogram = process_delta(norm_mel, scaler_delta)
-    delta2_spectrogram = process_delta(norm_mel, scaler_delta2, order=2)
     audio_features = extract_audio_features(y, sr)
-    return (
-        np.dstack([norm_mel, delta_spectrogram, delta2_spectrogram]),
-        audio_features,
-    )
+    if not no_mel:
+        norm_mel = process_log_mel_spectrogram(y, sr, scaler_mel)
+        delta_spectrogram = process_delta(norm_mel, scaler_delta)
+        delta2_spectrogram = process_delta(norm_mel, scaler_delta2, order=2)
+        return (
+            np.dstack([norm_mel, delta_spectrogram, delta2_spectrogram]),
+            audio_features,
+        )
+    return audio_features
 
 
 def extract_audio_features(y, sr):

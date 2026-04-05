@@ -1,2 +1,0 @@
-0.98524398
-# 99th-percentile MSE on healthy val data (all noise levels)

@@ -40,14 +40,15 @@ def explain_reconstruction(input_features, reconstructed_features, top_n=3):
     ranked = sorted(paired, key=lambda x: x[1], reverse=True)
 
     results = []
+    print(ranked[0])
     for name, error, actual, expected in ranked[:top_n]:
         results.append(
             {
                 "rank": len(results) + 1,
                 "feature": name,
-                "error": round(float(error), 4),
-                "actual": round(float(actual), 4),
-                "expected": round(float(expected), 4),
+                "error": round(float(np.mean(np.abs(error))), 4),
+                "actual": round(float(np.mean(actual)), 4),
+                "expected": round(float(np.mean(expected)), 4),
                 "diagnosis": FAULT_DICTIONARY[name],
             }
         )

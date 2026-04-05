@@ -17,6 +17,7 @@ class SPCMonitor:
         """
         Call ONCE before deployment.
         normal_mse_scores: a list of MSE values from purely normal audio
+        (MSE - Mean Squared Error)
         """
         self.baseline_mean = np.mean(normal_mse_scores)
         self.baseline_std = np.std(normal_mse_scores)

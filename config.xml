@@ -19,6 +19,11 @@
             <path>scalers/6_dB_valve/id_04/</path>
             <path>scalers/6_dB_valve/id_06/</path>
         </scalers>
+        <buffer_dir>audio_buffer</buffer_dir>
+        <model_dir_edge>model/edge</model_dir_edge>
+        <model_dir_gpu>model/gpu</model_dir_gpu>
+        <model_dir_classify>model/classifier</model_dir_classify>
+        <buffer_dir>audio_buffer</buffer_dir>
     </directories>
     
     <audio_params>

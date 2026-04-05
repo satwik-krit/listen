@@ -10,7 +10,8 @@ processed_features/
 scalers/
 raw_data/
 split_output/
-
+audio_buffer/
+*.swp
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

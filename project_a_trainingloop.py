@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 CFG = {
-    "input_dim"     : 8,
+    "input_dim"     : 11,
     "bottleneck_dim": 3,
     "learning_rate" : 1e-3,
     "epochs"        : 150,
@@ -50,6 +50,30 @@ class EdgeAutoencoder(nn.Module):
             nn.ReLU(),
             nn.Linear(mid, input_dim),
         )
+        self._init_weights()
+
+    def _init_weights(self):
+        for m in self.encoder.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_uniform_(m.weight, a=0, mode='fan_in', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+        
+        decoder_layers = list(self.decoder.children())
+        final_linear_idx = -1
+        for idx in range(len(decoder_layers)-1, -1, -1):
+            if isinstance(decoder_layers[idx], nn.Linear):
+                final_linear_idx = idx
+                break
+        
+        for idx, m in enumerate(decoder_layers):
+            if isinstance(m, nn.Linear):
+                if idx == final_linear_idx:
+                    nn.init.xavier_uniform_(m.weight)
+                else:
+                    nn.init.kaiming_uniform_(m.weight, a=0, mode='fan_in', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.decoder(self.encoder(x))
@@ -57,13 +81,25 @@ class EdgeAutoencoder(nn.Module):
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 
+def extend_to_11d(X_8d):
+    N = X_8d.shape[0]
+    X_11d = np.zeros((N, 11), dtype=np.float32)
+    X_11d[:, :8] = X_8d
+    # 3 temporal delta features representing first derivative of Kurtosis (col 1), RMS (col 0), and Peak Value (col 3)
+    X_11d[1:, 8] = X_11d[1:, 1] - X_11d[:-1, 1]
+    X_11d[1:, 9] = X_11d[1:, 0] - X_11d[:-1, 0]
+    X_11d[1:, 10] = X_11d[1:, 3] - X_11d[:-1, 3]
+    return X_11d
+
+
 def load_split(split_root: str, split: str = "train"):
     """
     Load X.npy and y.npy from split_output/{split}/model_A/.
-    Returns X (N,8) float32 and y (N,) int32.
+    Returns X (N,11) float32 and y (N,) int32.
     """
     folder = os.path.join(split_root, split, "model_A")
-    X = np.load(os.path.join(folder, "X.npy")).astype(np.float32)
+    X_8d = np.load(os.path.join(folder, "X.npy")).astype(np.float32)
+    X = extend_to_11d(X_8d)
     y = np.load(os.path.join(folder, "y.npy")).astype(np.int32)
 
     with open(os.path.join(folder, "meta.txt"), "r") as f:
@@ -134,6 +170,7 @@ def train_model(model, train_loader, val_loader, out_dir):
             optimizer.zero_grad()
             loss = criterion(model(batch), batch)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             train_loss += loss.item() * len(batch)
         train_loss /= len(train_loader.dataset)

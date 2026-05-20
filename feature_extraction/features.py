@@ -137,3 +137,99 @@ def create_master_mask(normal_files):
         noise_chunks.append(y)
 
     return np.concatenate(noise_chunks)
+
+
+class Preprocessor1D:
+    def __init__(self, sr=16000):
+        self.sr = sr
+        self.prev_kurtosis = 0.0
+        self.prev_rms = 0.0
+        self.prev_peak = 0.0
+        self.warmup_counter = 0
+        self.current_window_size = 2.0  # seconds
+
+    def set_window_size(self, size):
+        if size != self.current_window_size:
+            self.current_window_size = size
+            self.warmup_counter = 4  # Start the 4-frame warm-up mask
+
+    def extract_frame_features(self, y):
+        # 1. 8 static statistical features
+        rms = np.sqrt(np.mean(y ** 2))
+        mean_abs = np.mean(np.abs(y))
+        peak = np.max(np.abs(y))
+        
+        # Mean & Variance
+        mean_y = np.mean(y)
+        var_y = np.var(y)
+        std_y = np.std(y)
+        
+        # Kurtosis
+        kurtosis = np.mean((y - mean_y) ** 4) / (std_y ** 4 + 1e-9)
+        
+        # Skewness
+        skewness = np.mean((y - mean_y) ** 3) / (std_y ** 3 + 1e-9)
+        
+        # Factors
+        crest_factor = peak / (rms + 1e-9)
+        peak_factor = peak / (mean_abs + 1e-9)
+        shape_factor = rms / (mean_abs + 1e-9)
+        
+        # 2. 3 temporal delta features
+        if self.warmup_counter > 0:
+            # Transition Buffer Discard: discard/zero-out the temporal delta features
+            delta_kurtosis = 0.0
+            delta_rms = 0.0
+            delta_peak = 0.0
+            self.warmup_counter -= 1
+        else:
+            delta_kurtosis = kurtosis - self.prev_kurtosis
+            delta_rms = rms - self.prev_rms
+            delta_peak = peak - self.prev_peak
+            
+        # Update prev values
+        self.prev_kurtosis = kurtosis
+        self.prev_rms = rms
+        self.prev_peak = peak
+        
+        features = np.array([
+            rms, kurtosis, peak_factor, crest_factor, mean_y, var_y, skewness, shape_factor,
+            delta_kurtosis, delta_rms, delta_peak
+        ], dtype=np.float32)
+        
+        return features
+
+    def process_signal(self, y, mode="production"):
+        """
+        Processes a full 1D signal using windowing.
+        Modes:
+          - 'calibration': Force 2.0s window, stride 2.0s (0% overlap), extract 1,000 frames.
+          - 'production': 2.0s window, stride 1.0s (50% overlap).
+        """
+        window_len = int(self.current_window_size * self.sr)
+        if mode == "calibration":
+            window_len = int(2.0 * self.sr)
+            stride = window_len
+            num_frames = 1000
+        else:
+            stride = int(self.current_window_size * self.sr / 2) if self.current_window_size == 2.0 else int(self.current_window_size * self.sr)
+            # Calculate frames to fit full signal length
+            num_frames = (len(y) - window_len) // stride + 1
+            if num_frames <= 0:
+                num_frames = 1
+
+        features_list = []
+        for i in range(num_frames):
+            start_idx = i * stride
+            end_idx = start_idx + window_len
+            if end_idx > len(y):
+                frame_y = y[start_idx:]
+                if len(frame_y) < window_len:
+                    frame_y = np.pad(frame_y, (0, window_len - len(frame_y)))
+            else:
+                frame_y = y[start_idx:end_idx]
+            
+            feat = self.extract_frame_features(frame_y)
+            features_list.append(feat)
+
+        return np.array(features_list, dtype=np.float32)

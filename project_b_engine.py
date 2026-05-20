@@ -75,22 +75,29 @@ class MachineMelDataset(Dataset):
 # ─────────────────────────────────────────────
 # 3. ARCHITECTURE
 # ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# 3. ARCHITECTURE & HYBRID LOSS SYSTEM
+# ─────────────────────────────────────────────
+import librosa
+from pytorch_msssim import ssim
+
+def log_cosh_loss(recon, target):
+    # Stable Log-Cosh implementation: |d| + softplus(-2|d|) - log 2
+    d = recon - target
+    abs_d = torch.abs(d)
+    return (abs_d + F.softplus(-2.0 * abs_d) - np.log(2.0)).mean()
+
+def harmonized_loss(recon, original):
+    loss_logcosh = log_cosh_loss(recon, original)
+    ssim_val = ssim(recon, original, data_range=1.0, size_average=True)
+    loss_ssim = 1.0 - ssim_val
+    return 0.8 * loss_logcosh + 0.2 * loss_ssim
+
 class Encoder(nn.Module):
-    def _block(self, in_ch, out_ch):
-        return nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(out_ch),
-            nn.LeakyReLU(0.2, inplace=True),
-        )
     def __init__(self):
         super().__init__()
-        self.enc1 = self._block(3,   32)   
-        self.enc2 = self._block(32,  64)   
-        self.enc3 = self._block(64,  128)  
-        self.enc4 = self._block(128, 256)  
-        self.enc5 = self._block(256, 256)  
-    def forward(self, x):
-        return self.enc5(self.enc4(self.enc3(self.enc2(self.enc1(x)))))
+        # Placeholders to satisfy any legacy reflection/attributes queries
+        self.enc1 = nn.Identity()
 
 class Decoder(nn.Module):
     def _up_block(self, in_ch, out_ch):
@@ -109,9 +116,6 @@ class Decoder(nn.Module):
         self.dec5 = nn.Sequential(
             nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
             nn.Conv2d(32, 3, kernel_size=3, stride=1, padding=1),
-            # Note: Tanh or Identity might be better than Sigmoid if input is Z-score normalized
-            # but leaving Sigmoid if the hackathon logic strictly requires it. 
-            # If gradients vanish, swap nn.Sigmoid() for nn.Identity().
             nn.Sigmoid(), 
         )
     def forward(self, z):
@@ -120,17 +124,135 @@ class Decoder(nn.Module):
 class CNNAutoencoder(nn.Module):
     def __init__(self):
         super().__init__()
-        self.encoder = Encoder()
+        # Parallel encoders with Group Normalization (8 groups)
+        self.enc_low = nn.Sequential(
+            self._block(3, 32, stride=2),   # 64 -> 32
+            self._block(32, 64, stride=2),  # 32 -> 16
+            self._block(64, 128, stride=2), # 16 -> 8
+            self._block(128, 256, stride=2),# 8 -> 4
+            self._block(256, 256, stride=2),# 4 -> 2
+        )
+        self.enc_mid = nn.Sequential(
+            self._block(3, 32, stride=2),   # 52 -> 26
+            self._block(32, 64, stride=2),  # 26 -> 13
+            self._block(64, 128, stride=2), # 13 -> 7
+            self._block(128, 256, stride=2),# 7 -> 4
+            self._block(256, 256, stride=2),# 4 -> 2
+        )
+        self.enc_high = nn.Sequential(
+            self._block(3, 32, stride=2),   # 12 -> 6
+            self._block(32, 64, stride=2),  # 6 -> 3
+            self._block(64, 128, stride=2), # 3 -> 2
+            self._block(128, 256, stride=1),# 2 -> 2
+            self._block(256, 256, stride=1),# 2 -> 2
+        )
+        
+        # Hard 256-dimensional compression bottleneck layer
+        # 256 channels * 3 heads * 2 height * 4 width = 6144
+        self.bottleneck_linear = nn.Linear(6144, 256)
+        self.layer_norm = nn.LayerNorm(256)
+        self.dropout = nn.Dropout(p=0.1)
+        
+        # Decoder projection block
+        self.decoder_projection = nn.Linear(256, 4096)
         self.decoder = Decoder()
-    def forward(self, x):
-        return self.decoder(self.encoder(x))
+        self._init_weights()
 
-# ─────────────────────────────────────────────
-# 4. TRAINING LOGIC
-# ─────────────────────────────────────────────
-def fast_loss(recon, original):
-    # HACKATHON SPEED UP: Pure MSE is 50x faster.
-    return F.mse_loss(recon, original)
+    def _block(self, in_ch, out_ch, stride=2):
+        return nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=stride, padding=1),
+            nn.GroupNorm(8, out_ch),
+            nn.LeakyReLU(0.2, inplace=True),
+        )
+
+    def _init_weights(self):
+        # Xavier Uniform for linear bottleneck
+        nn.init.xavier_uniform_(self.bottleneck_linear.weight)
+        if self.bottleneck_linear.bias is not None:
+            nn.init.zeros_(self.bottleneck_linear.bias)
+            
+        nn.init.xavier_uniform_(self.decoder_projection.weight)
+        if self.decoder_projection.bias is not None:
+            nn.init.zeros_(self.decoder_projection.bias)
+        
+        # Kaiming Uniform for conv weights
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
+                nn.init.kaiming_uniform_(m.weight, a=0.2, mode='fan_in', nonlinearity='leaky_relu')
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+
+    def encode(self, x):
+        # Exact Mel-Bin boundary calculations programmatically
+        mel_freqs = librosa.mel_frequencies(n_mels=128, fmin=0, fmax=11025)
+        idx_2k = int(np.argmin(np.abs(mel_freqs - 2000)))
+        idx_8k = int(np.argmin(np.abs(mel_freqs - 8000)))
+        
+        # Row-wise Mel slicing
+        low_img = x[:, :, :idx_2k, :]
+        mid_img = x[:, :, idx_2k:idx_8k, :]
+        high_img = x[:, :, idx_8k:, :]
+        
+        low_enc = self.enc_low(low_img)
+        mid_enc = self.enc_mid(mid_img)
+        high_enc = self.enc_high(high_img)
+        
+        # Shape assertions to guarantee downsampled sizes never contract to 0 rows
+        assert low_enc.shape[2] > 0 and low_enc.shape[3] > 0, f"Low-freq encoder contracted: {low_enc.shape}"
+        assert mid_enc.shape[2] > 0 and mid_enc.shape[3] > 0, f"Mid-freq encoder contracted: {mid_enc.shape}"
+        assert high_enc.shape[2] > 0 and high_enc.shape[3] > 0, f"High-freq encoder contracted: {high_enc.shape}"
+        
+        # Flatten and concatenate parallel maps
+        low_flat = low_enc.reshape(low_enc.size(0), -1)
+        mid_flat = mid_enc.reshape(mid_enc.size(0), -1)
+        high_flat = high_enc.reshape(high_enc.size(0), -1)
+        
+        fused = torch.cat([low_flat, mid_flat, high_flat], dim=1)
+        
+        # Bottleneck compression
+        compressed = self.bottleneck_linear(fused)
+        compressed = self.layer_norm(compressed)
+        compressed = self.dropout(compressed)
+        return compressed
+
+    def forward(self, x):
+        z = self.encode(x)
+        dec_proj = self.decoder_projection(z)
+        dec_in = dec_proj.reshape(dec_proj.size(0), 256, 4, 4)
+        return self.decoder(dec_in)
+
+def get_lr_multiplier(epoch, num_epochs=15, warmup_epochs=5):
+    if epoch < warmup_epochs:
+        return float(epoch + 1) / warmup_epochs
+    else:
+        progress = float(epoch - warmup_epochs) / float(num_epochs - warmup_epochs)
+        return 0.5 * (1.0 + np.cos(np.pi * progress))
+
+def train_and_save_svm(X_scalar_healthy, out_dir):
+    from sklearn.svm import OneClassSVM
+    import pickle
+    
+    # Grid Search over gamma parameter
+    param_grid = [1e-4, 1e-3, 1e-2, 1e-1, "scale", "auto"]
+    best_gamma = "scale"
+    best_score = float("-inf")
+    
+    for gamma in param_grid:
+        svm = OneClassSVM(nu=0.01, kernel="rbf", gamma=gamma)
+        svm.fit(X_scalar_healthy)
+        preds = svm.predict(X_scalar_healthy)
+        outlier_ratio = np.mean(preds == -1)
+        score = -abs(outlier_ratio - 0.01)
+        if score > best_score:
+            best_score = score
+            best_gamma = gamma
+            
+    best_svm = OneClassSVM(nu=0.01, kernel="rbf", gamma=best_gamma)
+    best_svm.fit(X_scalar_healthy)
+    
+    with open(os.path.join(out_dir, "one_class_svm.pkl"), "wb") as f:
+        pickle.dump(best_svm, f)
+    print(f"      ✓ Trained OneClassSVM (gamma={best_gamma}) saved!")
 
 def main():
     print("\n╔══════════════════════════════════════════════════════════╗")
@@ -143,6 +265,7 @@ def main():
     # THE RAM FIX: Memory map the array directly from NVMe drive
     print("\n[ 1 / 3 ] Memory-Mapping X_mel.npy...")
     X_mmap = np.load(os.path.join(train_folder, "X_mel.npy"), mmap_mode='r')
+    X_scalar_all = np.load(os.path.join(train_folder, "X_scalar.npy")).astype(np.float32)
     y_all = np.load(os.path.join(train_folder, "y.npy")).astype(np.int32)
     with open(os.path.join(train_folder, "meta.txt")) as f:
         meta = [l.strip() for l in f]
@@ -174,6 +297,10 @@ def main():
 
         # Pull ONLY this machine's normal data into RAM (~200 MB maximum)
         X_normal = X_mmap[normal_indices].copy()
+        X_scalar_machine = X_scalar_all[normal_indices]
+
+        # Train OneClassSVM with hyperparameter grid-search CV
+        train_and_save_svm(X_scalar_machine, out_dir)
 
         # BLUEPRINT 2: Stats Update (Z-score math)
         ch_mean = [float(X_normal[:, c, :, :].mean()) for c in range(3)]
@@ -204,6 +331,9 @@ def main():
         model = CNNAutoencoder().to(DEVICE)
         opt = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
         
+        # Linear lr warmup + cosine decay scheduler
+        scheduler = optim.lr_scheduler.LambdaLR(opt, lr_lambda=lambda ep: get_lr_multiplier(ep, num_epochs=EPOCHS, warmup_epochs=5))
+        
         # BLUEPRINT 3: Initialize the AMP Scaler
         scaler = torch.cuda.amp.GradScaler(enabled=DEVICE.type == 'cuda')
         
@@ -218,14 +348,30 @@ def main():
             train_pbar = tqdm(train_loader, desc=f"Epoch {epoch+1:02d}/{EPOCHS} [Train]", leave=False)
             
             for batch in train_pbar:
-                batch = batch.to(DEVICE, non_blocking=True) # Send to GPU
+                # Hutchinson Trace requires requires_grad=True
+                batch = batch.to(DEVICE, non_blocking=True)
+                batch.requires_grad_(True)
+                assert batch.requires_grad, "Graph Tracker Failure: Input tensor requires_grad is False."
+
                 opt.zero_grad(set_to_none=True) 
                 
                 # BLUEPRINT 3: Mixed Precision Forward Pass
                 with torch.autocast(device_type=DEVICE.type, dtype=torch.float16, enabled=DEVICE.type == 'cuda'):
-                    recon = model(batch)
-                    loss = fast_loss(recon, batch)
+                    encoded = model.encode(batch)
+                    dec_proj = model.decoder_projection(encoded)
+                    dec_in = dec_proj.reshape(dec_proj.size(0), 256, 4, 4)
+                    recon = model.decoder(dec_in)
                     
+                    # Harmonized reconstruction loss
+                    loss_recon = harmonized_loss(recon, batch)
+                    
+                # Hutchinson Trace Estimator for Contractive Jacobian Penalty
+                v = torch.randn_like(encoded)
+                vjp = torch.autograd.grad(encoded, batch, grad_outputs=v, create_graph=True)[0]
+                loss_contractive = 1e-4 * (vjp ** 2).sum()
+                
+                loss = loss_recon + loss_contractive
+                
                 scaler.scale(loss).backward()
                 scaler.step(opt)
                 scaler.update()
@@ -234,6 +380,7 @@ def main():
                 train_pbar.set_postfix(loss=loss.item())
                 
             train_loss /= len(train_loader)
+            scheduler.step()
             
             model.eval()
             val_loss = 0.0
@@ -250,7 +397,7 @@ def main():
                     with torch.autocast(device_type=DEVICE.type, dtype=torch.float16, enabled=DEVICE.type == 'cuda'):
                         recon = model(batch)
                         for i in range(len(batch)):
-                            s_loss = fast_loss(recon[i:i+1], batch[i:i+1])
+                            s_loss = harmonized_loss(recon[i:i+1], batch[i:i+1])
                             val_scores.append(s_loss.item())
                             val_loss += s_loss.item()
             

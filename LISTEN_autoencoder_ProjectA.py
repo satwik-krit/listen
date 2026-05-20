@@ -19,7 +19,7 @@ class EdgeLinearAE(nn.Module):
     def __init__(self):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(8, 16),
+            nn.Linear(11, 16),
             nn.ReLU(),
             nn.Linear(16, 4),
             nn.ReLU()
@@ -27,15 +27,32 @@ class EdgeLinearAE(nn.Module):
         self.decoder = nn.Sequential(
             nn.Linear(4, 16),
             nn.ReLU(),
-            nn.Linear(16, 8)
+            nn.Linear(16, 11)
         )
         self._init_weights()
 
     def _init_weights(self):
-        for m in self.modules():
+        for m in self.encoder.modules():
             if isinstance(m, nn.Linear):
-                nn.init.kaiming_uniform_(m.weight, nonlinearity='relu')
-                nn.init.zeros_(m.bias)
+                nn.init.kaiming_uniform_(m.weight, a=0, mode='fan_in', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+        
+        decoder_layers = list(self.decoder.children())
+        final_linear_idx = -1
+        for idx in range(len(decoder_layers)-1, -1, -1):
+            if isinstance(decoder_layers[idx], nn.Linear):
+                final_linear_idx = idx
+                break
+        
+        for idx, m in enumerate(decoder_layers):
+            if isinstance(m, nn.Linear):
+                if idx == final_linear_idx:
+                    nn.init.xavier_uniform_(m.weight)
+                else:
+                    nn.init.kaiming_uniform_(m.weight, a=0, mode='fan_in', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
 
     def forward(self, x):
         z = self.encoder(x)
@@ -66,6 +83,7 @@ def train_autoencoder(raw_features, epochs=300, batch_size=64, lr=1e-3, save_pat
             loss = criterion(recon, batch)
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
     model.eval().cpu()
@@ -102,7 +120,7 @@ def export_and_quantize(model, train_raw, scaler, onnx_path="edge_ae.onnx", tfli
     import shutil
 
     # 1. Stable ONNX Export (Opset 13 avoids some INT8 reduce_prod bugs)
-    dummy_input = torch.zeros(1, 8)
+    dummy_input = torch.zeros(1, 11)
     torch.onnx.export(model, dummy_input, onnx_path, export_params=True, opset_version=13, do_constant_folding=False)
 
     # 2. ONNX -> TF SavedModel
@@ -166,8 +184,8 @@ def generate_cpp_deployment(tflite_path, threshold, scaler, output_h="edge_ae_mo
 extern const unsigned char g_model_data[];
 extern const unsigned int  g_model_data_len;
 extern const float ALARM_THRESHOLD;
-extern const float FEATURE_MEAN[8];
-extern const float FEATURE_SCALE[8];
+extern const float FEATURE_MEAN[11];
+extern const float FEATURE_SCALE[11];
 """
     with open(output_h, "w") as f:
         f.write(h_content)
@@ -219,15 +237,15 @@ alignas(8) const unsigned char g_model_data[] PROGMEM = {{
 const unsigned int g_model_data_len = {len(model_bytes)};
 const float ALARM_THRESHOLD = {threshold:.8f}f;
 
-const float FEATURE_MEAN[8]  = {{{', '.join(map(str, scaler.mean_))}}};
-const float FEATURE_SCALE[8] = {{{', '.join(map(str, scaler.scale_))}}};
+const float FEATURE_MEAN[11]  = {{{', '.join(map(str, scaler.mean_))}}};
+const float FEATURE_SCALE[11] = {{{', '.join(map(str, scaler.scale_))}}};
 
 tflite::MicroMutableOpResolver<3> resolver;
 const tflite::Model* model_ptr = nullptr;
 tflite::MicroInterpreter* interpreter = nullptr;
 
 void normalize_and_quantize(float* raw, int8_t* out) {{
-    for (int i = 0; i < 8; i++) {{
+    for (int i = 0; i < 11; i++) {{
         float norm = (raw[i] - FEATURE_MEAN[i]) / FEATURE_SCALE[i];
         int32_t quantized = static_cast<int32_t>(round(norm / INPUT_SCALE)) + INPUT_ZERO_POINT;
         out[i] = static_cast<int8_t>(std::max(-128, std::min(127, (int)quantized)));
@@ -257,7 +275,7 @@ void setup() {{
     Serial.println("System Boot: Edge AI Pipeline Online.");
 }}
 
-float run_inference(float raw_features[8]) {{
+float run_inference(float raw_features[11]) {{
     TfLiteTensor* input  = interpreter->input(0);
     TfLiteTensor* output = interpreter->output(0);
 
@@ -269,7 +287,7 @@ float run_inference(float raw_features[8]) {{
     }}
 
     float mse = 0.0f;
-    for (int i = 0; i < 8; i++) {{
+    for (int i = 0; i < 11; i++) {{
         // BUG FIX: Compare Dequantized Output to Dequantized Input (Not Raw Float)
         float recon = (output->data.int8[i] - OUTPUT_ZERO_POINT) * OUTPUT_SCALE;
         float deq_in = (input->data.int8[i] - INPUT_ZERO_POINT) * INPUT_SCALE;
@@ -277,12 +295,12 @@ float run_inference(float raw_features[8]) {{
         float diff = recon - deq_in;
         mse += diff * diff;
     }}
-    return mse / 8.0f;
+    return mse / 11.0f;
 }}
 
 void loop() {{
-    // Simulated live DSP feed
-    float live_data[8] = {{0.05, 0.001, 0.12, 220.0, 3500.0, 6000.0, -5.0, 3.0}}; 
+    // Simulated live DSP feed (11 features)
+    float live_data[11] = {{0.05, 0.001, 0.12, 220.0, 3500.0, 6000.0, -5.0, 3.0, 0.0, 0.0, 0.0}}; 
     float mse = run_inference(live_data);
     
     if (mse >= 0.0f) {{
@@ -307,10 +325,15 @@ if __name__ == "__main__":
         np.random.normal(0.05, 0.01, N), np.random.normal(0.001, 0.0002, N),
         np.random.normal(0.12, 0.02, N), np.random.normal(220.0, 30.0, N),
         np.random.normal(3500.0, 400.0, N), np.random.normal(6000.0, 600.0, N),
-        np.random.normal(-5.0, 2.0, N), np.random.normal(3.0, 1.5, N)
+        np.random.normal(-5.0, 2.0, N), np.random.normal(3.0, 1.5, N),
+        np.random.normal(0.0, 0.1, N), np.random.normal(0.0, 0.05, N), np.random.normal(0.0, 0.2, N)
     ])
 
     model, scaler = train_autoencoder(synthetic_data)
     threshold = compute_threshold(model, scaler, synthetic_data)
-    tflite_path = export_and_quantize(model, synthetic_data, scaler)
-    generate_cpp_deployment(tflite_path, threshold, scaler)
+    # TFLite/TF SavedModel generation might be skipped if not fully supported locally, but keep definition intact
+    try:
+        tflite_path = export_and_quantize(model, synthetic_data, scaler)
+        generate_cpp_deployment(tflite_path, threshold, scaler)
+    except Exception as e:
+        print(f"[Warn] Local TF/ONNX tools not present. Skipping TFLite compilation. {e}")

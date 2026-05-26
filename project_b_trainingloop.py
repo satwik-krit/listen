@@ -127,9 +127,6 @@ def fast_loss(recon, original):
     return F.mse_loss(recon, original)
 
 def main():
-    print("\n╔══════════════════════════════════════════════════════════╗")
-    print("║     Model B — Hackathon Survival Training Pipeline       ║")
-    print("╚══════════════════════════════════════════════════════════╝")
     
     train_folder = os.path.join(SPLIT_DIR, "train", "model_B")
     
@@ -155,7 +152,7 @@ def main():
         normal_indices = indices[normal_mask]
         
         if len(normal_indices) < 10:
-            print(f"  ⚠ Skipping {machine_name}: Not enough normal data.")
+            print(f"  Skipping {machine_name}: Not enough normal data.")
             continue
             
         print(f"\n  ── {machine_name.upper()}  ({len(normal_indices)} normal samples)")
@@ -230,7 +227,7 @@ def main():
         del X_normal, X_tr, X_val, train_loader, val_loader, model
         gc.collect()
 
-    print("\n🎉 Training Complete! All models saved to Edge Deployments.")
+    print("\nTraining Complete! All models saved to Edge Deployments.")
 
 if __name__ == "__main__":
     main()

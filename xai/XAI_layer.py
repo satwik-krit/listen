@@ -22,6 +22,28 @@ warnings.filterwarnings("ignore")
 # 1.  MODEL  (reconstructed from saved weight shapes)
 # ─────────────────────────────────────────────────────────────
 
+class Decoder(nn.Module):
+    def _up_block(self, in_ch: int, out_ch: int) -> nn.Sequential:
+        return nn.Sequential(
+            nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(out_ch),
+            nn.LeakyReLU(0.2, inplace=False), # False for GradientSHAP
+        )
+    def __init__(self) -> None:
+        super().__init__()
+        self.dec1 = self._up_block(256, 256) 
+        self.dec2 = self._up_block(256, 128) 
+        self.dec3 = self._up_block(128,  64) 
+        self.dec4 = self._up_block( 64,  32) 
+        self.dec5 = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
+            nn.Conv2d(32, 3, kernel_size=3, stride=1, padding=1),
+            nn.Sigmoid(), 
+        )
+    def forward(self, z: torch.Tensor) -> torch.Tensor:
+        return self.dec5(self.dec4(self.dec3(self.dec2(self.dec1(z)))))
+
 class CAEModel(nn.Module):
     """
     Convolutional Autoencoder matching the .pth weight layout.
@@ -32,77 +54,85 @@ class CAEModel(nn.Module):
 
     def __init__(self):
         super().__init__()
+        # Parallel encoders with Group Normalization (8 groups)
+        self.enc_low = nn.Sequential(
+            self._block(3, 32, stride=2),   # 64 -> 32
+            self._block(32, 64, stride=2),  # 32 -> 16
+            self._block(64, 128, stride=2), # 16 -> 8
+            self._block(128, 256, stride=2),# 8 -> 4
+            self._block(256, 256, stride=2),# 4 -> 2
+        )
+        self.enc_mid = nn.Sequential(
+            self._block(3, 32, stride=2),   # 52 -> 26
+            self._block(32, 64, stride=2),  # 26 -> 13
+            self._block(64, 128, stride=2), # 13 -> 7
+            self._block(128, 256, stride=2),# 7 -> 4
+            self._block(256, 256, stride=2),# 4 -> 2
+        )
+        self.enc_high = nn.Sequential(
+            self._block(3, 32, stride=2),   # 12 -> 6
+            self._block(32, 64, stride=2),  # 6 -> 3
+            self._block(64, 128, stride=2), # 3 -> 2
+            self._block(128, 256, stride=1),# 2 -> 2
+            self._block(256, 256, stride=1),# 2 -> 2
+        )
+        
+        self.bottleneck_linear = nn.Linear(6144, 256)
+        self.layer_norm = nn.LayerNorm(256)
+        self.dropout = nn.Dropout(p=0.1)
+        
+        self.decoder_projection = nn.Linear(256, 4096)
+        self.decoder = Decoder()
 
-        def enc_block(ic, oc):
-            return nn.Sequential(
-                nn.Conv2d(ic, oc, 3, padding=1),
-                nn.BatchNorm2d(oc),
-                nn.LeakyReLU(0.2, inplace=False),
-            )
+    def _block(self, in_ch, out_ch, stride=2):
+        return nn.Sequential(
+            nn.Conv2d(in_ch, out_ch, kernel_size=3, stride=stride, padding=1),
+            nn.GroupNorm(8, out_ch),
+            nn.LeakyReLU(0.2, inplace=False),
+        )
 
-        def dec_block(ic, oc, last=False):
-            if last:
-                return nn.Sequential(
-                    nn.Conv2d(ic, oc, 3, padding=1),
-                )
-            return nn.Sequential(
-                nn.Conv2d(ic, oc, 3, padding=1),
-                nn.BatchNorm2d(oc),
-                nn.LeakyReLU(0.2, inplace=False),
-            )
-
-        self.encoder = nn.ModuleDict({
-            "enc1": enc_block(3,   32),
-            "enc2": enc_block(32,  64),
-            "enc3": enc_block(64,  128),
-            "enc4": enc_block(128, 256),
-            "enc5": enc_block(256, 256),
-        })
-        self.decoder = nn.ModuleDict({
-            "dec1": dec_block(256, 256),
-            "dec2": dec_block(256, 128),
-            "dec3": dec_block(128, 64),
-            "dec4": dec_block(64,  32),
-            "dec5": dec_block(32,  3, last=True),
-        })
+    def encode(self, x):
+        import librosa
+        mel_freqs = librosa.mel_frequencies(n_mels=128, fmin=0, fmax=11025)
+        idx_2k = int(np.argmin(np.abs(mel_freqs - 2000)))
+        idx_8k = int(np.argmin(np.abs(mel_freqs - 8000)))
+        
+        # Row-wise Mel slicing
+        low_img = x[:, :, :idx_2k, :]
+        mid_img = x[:, :, idx_2k:idx_8k, :]
+        high_img = x[:, :, idx_8k:, :]
+        
+        low_enc = self.enc_low(low_img)
+        mid_enc = self.enc_mid(mid_img)
+        high_enc = self.enc_high(high_img)
+        
+        assert low_enc.shape[2] > 0 and low_enc.shape[3] > 0, f"Low-freq encoder contracted: {low_enc.shape}"
+        assert mid_enc.shape[2] > 0 and mid_enc.shape[3] > 0, f"Mid-freq encoder contracted: {mid_enc.shape}"
+        assert high_enc.shape[2] > 0 and high_enc.shape[3] > 0, f"High-freq encoder contracted: {high_enc.shape}"
+        
+        # Flatten and concatenate parallel maps
+        low_flat = low_enc.reshape(low_enc.size(0), -1)
+        mid_flat = mid_enc.reshape(mid_enc.size(0), -1)
+        high_flat = high_enc.reshape(high_enc.size(0), -1)
+        
+        fused = torch.cat([low_flat, mid_flat, high_flat], dim=1)
+        
+        compressed = self.bottleneck_linear(fused)
+        compressed = self.layer_norm(compressed)
+        compressed = self.dropout(compressed)
+        return compressed
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        sizes, indices = [], []
-
-        for name in ["enc1", "enc2", "enc3", "enc4", "enc5"]:
-            sizes.append(x.shape)
-            x = self.encoder[name](x)
-            x, idx = F.max_pool2d(x, kernel_size=2, stride=2, return_indices=True)
-            indices.append(idx)
-
-        for i, name in enumerate(["dec1", "dec2", "dec3", "dec4", "dec5"]):
-            x = F.max_unpool2d(x, indices[-(i + 1)],
-                               kernel_size=2, stride=2,
-                               output_size=sizes[-(i + 1)])
-            x = self.decoder[name](x)
-
-        return x
+        z = self.encode(x)
+        dec_proj = self.decoder_projection(z)
+        dec_in = dec_proj.reshape(dec_proj.size(0), 256, 4, 4)
+        return self.decoder(dec_in)
 
 def load_cae(model_path: str | Path, device: str = "cpu") -> CAEModel:
-    """Load CAEModel from a .pth state-dict, remapping decoder key indices."""
+    """Load CAEModel from a .pth state-dict."""
     state = torch.load(model_path, map_location=device, weights_only=True)
     model = CAEModel().to(device)
-
-    remapped = {}
-    for k, v in state.items():
-        if k.startswith("decoder."):
-            parts = k.split(".")
-            if len(parts) >= 3 and parts[2].isdigit():
-                parts[2] = str(int(parts[2]) - 1)
-                k = ".".join(parts)
-        remapped[k] = v
-
-    missing, unexpected = model.load_state_dict(remapped, strict=False)
-    if missing:
-        print(f"[load_cae] Missing    : {missing}")
-    if unexpected:
-        print(f"[load_cae] Unexpected : {unexpected}")
-
+    model.load_state_dict(state, strict=True)
     model.eval()
     return model
 

@@ -185,20 +185,18 @@ class ModelManager:
 
         d = self._edge_dir(machine_type, machine_id)
         print(f"[LAZY] Edge model: {key} from {d}")
+        
+        options = ort.SessionOptions()
+        options.add_config_entry("session.disable_quant_qdq_ops", "1")
+        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
+        
         session = ort.InferenceSession(
-            str(d / "edge_ae.onnx"), providers=["CPUExecutionProvider"]
+            str(d / "edge_ae.onnx"), options, providers=["XNNPACKExecutionProvider", "CPUExecutionProvider"]
         )
         scaler = joblib.load(d / "scaler.pkl")
-        # threshold = float((d / "threshold.txt").read_text().strip())
-        # Use utf-8-sig to safely consume any hidden BOM characters, and strip accidental quotes
-        # Read file, split at the first '#' to remove comments, then strip whitespace/quotes
         raw_text = (d / "threshold.txt").read_text(encoding="utf-8-sig")
         clean_thresh = raw_text.split("#")[0].strip().strip("'\"")
         threshold = float(clean_thresh)
-        # raw_thresh = (
-        #     (d / "threshold.txt").read_text(encoding="utf-8-sig").strip().strip("'\"")
-        # )
-        # threshold = float(raw_thresh)
         self._edge[key] = {"session": session, "scaler": scaler, "threshold": threshold}
         print(f"[✓] Edge {key.upper()} ready  (thr={threshold:.5f})")
 

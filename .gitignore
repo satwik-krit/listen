@@ -12,6 +12,7 @@ raw_data/
 split_output/
 audio_buffer/
 *.swp
+tags
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

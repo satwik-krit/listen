@@ -1,10 +1,3 @@
-"""
-feature_extraction/inference.py  — Per-machine scaler-aware inference wrapper.
-
-The model_manager.py now calls feature extraction directly with librosa,
-but this module remains the canonical entry-point for the classify-only path.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -37,22 +30,25 @@ def _load_scalers(machine_type: str, machine_id: str) -> dict:
     candidates = [
         root / "scalers" / f"6_dB_{machine_type}" / f"id_{machine_id}",
         root / "scalers" / f"6_dB_{machine_type}" / "id_00",
-        root / "scalers" / "6_dB_valve"            / "id_00",
+        root / "scalers" / "6_dB_valve" / "id_00",
     ]
     # Also try paths from config.SCALER_DIRS
     candidates += list(config.SCALER_DIRS)
 
     for d in candidates:
         d = Path(d)
-        mel_path  = d / "scaler_mel.pkl"
+        mel_path = d / "scaler_mel.pkl"
         if mel_path.exists():
             _scaler_cache[key] = {
-                "scaler_mel":   joblib.load(mel_path),
+                "scaler_mel": joblib.load(mel_path),
                 "scaler_delta": joblib.load(d / "scaler_delta.pkl"),
-                "scaler_delta2":joblib.load(d / "scaler_delta2.pkl"),
-                "master_noise": joblib.load(d / "master_noise.pkl")
-                                if (d / "master_noise.pkl").exists() else None,
-                "source":       str(d),
+                "scaler_delta2": joblib.load(d / "scaler_delta2.pkl"),
+                "master_noise": (
+                    joblib.load(d / "master_noise.pkl")
+                    if (d / "master_noise.pkl").exists()
+                    else None
+                ),
+                "source": str(d),
             }
             return _scaler_cache[key]
 
@@ -65,8 +61,8 @@ def _load_scalers(machine_type: str, machine_id: str) -> dict:
 def process_incoming_audio(
     file_path: str | Path,
     machine_type: str = "valve",
-    machine_id:   str = "00",
-    no_mel:       bool = False,
+    machine_id: str = "00",
+    no_mel: bool = False,
 ) -> np.ndarray:
     """
     Full feature extraction pipeline for a single WAV file.
@@ -88,10 +84,10 @@ def process_incoming_audio(
 
     result = process_file(
         file_path,
-        scaler_mel    = scalers["scaler_mel"],
-        scaler_delta  = scalers["scaler_delta"],
-        scaler_delta2 = scalers["scaler_delta2"],
-        master_noise  = scalers["master_noise"],
-        no_mel        = no_mel,
+        scaler_mel=scalers["scaler_mel"],
+        scaler_delta=scalers["scaler_delta"],
+        scaler_delta2=scalers["scaler_delta2"],
+        master_noise=scalers["master_noise"],
+        no_mel=no_mel,
     )
     return result

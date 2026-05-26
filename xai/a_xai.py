@@ -17,10 +17,6 @@ scoring_engine = scoringEngine(
     critical_threshold=0.08, warning_threshold=0.05, window_size=10
 )
 
-# ---------------------------------------------------------
-# 2. THE EDGE INFERENCE LOOP (Runs continuously)
-# ---------------------------------------------------------
-
 
 def run_edge_inference():
     print("Starting Edge Monitor...")
@@ -58,9 +54,6 @@ def run_edge_inference():
         time.sleep(1)  # Or whatever your polling rate is
 
 
-# ---------------------------------------------------------
-# 3. YOUR XAI EXPLANATION HELPER
-# ---------------------------------------------------------
 def trigger_xai_explanation(incoming_data, reconstructed_data):
     """
     When the Scoring Engine alarms, this function explains WHY.
@@ -68,14 +61,6 @@ def trigger_xai_explanation(incoming_data, reconstructed_data):
     from xai.a_pferd import explain_reconstruction, print_explanation
 
     print_explanation(explain_reconstruction(incoming_data, reconstructed_data))
-    # # Find which feature had the worst reconstruction error
-    # worst_feature_idx = np.argmax(feature_errors)
-    # max_error_val = feature_errors[0][worst_feature_idx]
-
-    # print(
-    #     f"--> XAI DIAGNOSIS: The anomaly is being driven primarily by Feature Index [{worst_feature_idx}] with an error variance of {max_error_val:.4f}"
-    # )
-    # Here you could send this data to an MQTT topic, a dashboard, or a log file.
 
 
 # Dummy function for the example

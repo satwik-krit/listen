@@ -32,6 +32,7 @@ try:
     FIXED_WIDTH = int(root.findtext("audio_params/fixed_width"))
     HOP_LENGTH = int(root.findtext("audio_params/hop_length"))
     N_FFT = int(root.findtext("audio_params/n_fft"))
+    FRAME_LENGTH = N_FFT
 
 except FileNotFoundError:
     print(f"CRITICAL ERROR: Configuration file '{XML_FILE.name}' not found.")

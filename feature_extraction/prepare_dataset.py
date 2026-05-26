@@ -6,7 +6,7 @@ from tqdm import tqdm
 import joblib
 
 import config
-from features import get_normal_baseline, process_file, create_master_mask
+from .features import get_normal_baseline, process_file, create_master_mask
 
 
 def process_file_and_save(
@@ -23,7 +23,6 @@ def process_file_and_save(
             file_path, scaler_mel, scaler_delta, scaler_delta2, master_noise
         )
         relative_path = file_path.relative_to(input_dir)
-        print(relative_path)
         target_path_mel = output_dir / relative_path.with_suffix(".npy")
 
         # Extract the base name without the .wav extension
@@ -75,18 +74,18 @@ def batch_process(input_dir, output_dir, scaler_dir):
         master_noise=master_noise,
     )
 
-    with ProcessPoolExecutor() as executor:
-        results = list(
-            tqdm(
-                executor.map(worker_func, all_files, chunksize=20), total=len(all_files)
-            )
-        )
-
-    end = time.perf_counter()
-    print(f"FINISHED in {round(end - start, 2)} seconds.")
-    print(
-        f"\t{results.count(0)} NORMAL files\n\t{results.count(1)} ABNORMAL files\n\t{results.count(-1)} ERRORS"
-    )
+    # with ProcessPoolExecutor() as executor:
+    #     results = list(
+    #         tqdm(
+    #             executor.map(worker_func, all_files, chunksize=20), total=len(all_files)
+    #         )
+    #     )
+    #
+    # end = time.perf_counter()
+    # print(f"FINISHED in {round(end - start, 2)} seconds.")
+    # print(
+    #     f"\t{results.count(0)} NORMAL files\n\t{results.count(1)} ABNORMAL files\n\t{results.count(-1)} ERRORS"
+    # )
 
 
 if __name__ == "__main__":

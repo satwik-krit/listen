@@ -149,11 +149,6 @@ def discover_machines(raw_data: Path, filter_type: Optional[str] = None) -> list
     return machines
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# DUMMY WAV (fallback when no raw_data exists)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
 def _make_dummy_wav(path: Path, machine_type: str = "valve", anomaly: bool = False):
     """Generate a synthetic WAV using only the stdlib — no librosa needed."""
     import wave, struct, math
@@ -188,11 +183,6 @@ def _make_dummy_wav(path: Path, machine_type: str = "valve", anomaly: bool = Fal
                 value = value * 0.7 + noise
             value = max(-1.0, min(1.0, value))
             wf.writeframes(struct.pack("<h", int(32767 * value)))
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# VIRTUAL NODE (one per machine instance)
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 class VirtualNode(threading.Thread):
@@ -282,11 +272,6 @@ class VirtualNode(threading.Thread):
             time.sleep(max(1.0, sleep_secs))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# DUMMY-MODE NODE (when raw_data doesn't exist)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
 class DummyNode(VirtualNode):
     """Falls back to synthesised WAV files when no dataset is present."""
 
@@ -302,11 +287,6 @@ class DummyNode(VirtualNode):
         if not fname.exists():
             _make_dummy_wav(fname, self.machine_type, anomaly=inject)
         return fname, inject
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ENTRY POINT
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 def main():

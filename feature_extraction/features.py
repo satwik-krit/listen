@@ -53,10 +53,12 @@ def process_log_mel_spectrogram(y, sr, scaler_mel=None):
     return norm_mel.reshape(log_mel_spectro.shape)
 
 
-def process_delta(series, scaler_delta, order=1):
+def process_delta(series, scaler_delta=None, order=1):
     d = librosa.feature.delta(series, order=order)
-    d_scaled = scaler_delta.transform(d.flatten().reshape(-1, 1))
-    return d_scaled.reshape(d.shape)
+    if scaler_delta:
+        d_scaled = scaler_delta.transform(d.flatten().reshape(-1, 1))
+        return d_scaled.reshape(d.shape)
+    return d
 
 
 def process_file(
@@ -89,6 +91,9 @@ def extract_audio_features(y, sr):
     6: MFCC 1
     7: MFCC 2
     """
+
+    # TODO: Find out why we are taking a mean of zcr when we can plot a graph of
+    # it. Surely is that not better?
     zcr = np.mean(librosa.feature.zero_crossing_rate(y=y))
 
     rms = librosa.feature.rms(y=y)
@@ -132,7 +137,7 @@ def remove_background_noise(y, sr, master_noise=None):
 def create_master_mask(normal_files):
     noise_chunks = list()
 
-    for file in normal_files[:20]:
+    for file in normal_files[:50]:
         y, _ = librosa.load(file, sr=config.SAMPLING_RATE, duration=0.5)
         noise_chunks.append(y)
 

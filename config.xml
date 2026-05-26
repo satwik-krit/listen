@@ -6,26 +6,207 @@
             <path>raw_data/6_dB_valve/valve/id_02/</path>
             <path>raw_data/6_dB_valve/valve/id_04/</path>
             <path>raw_data/6_dB_valve/valve/id_06/</path>
+
+            <path>raw_data/0_dB_valve/valve/id_00/</path>
+            <path>raw_data/0_dB_valve/valve/id_02/</path>
+            <path>raw_data/0_dB_valve/valve/id_04/</path>
+            <path>raw_data/0_dB_valve/valve/id_06/</path>
+
+            <path>raw_data/-6_dB_valve/valve/id_00/</path>
+            <path>raw_data/-6_dB_valve/valve/id_02/</path>
+            <path>raw_data/-6_dB_valve/valve/id_04/</path>
+            <path>raw_data/-6_dB_valve/valve/id_06/</path>
+
+
+            <path>raw_data/6_dB_fan/fan/id_00/</path>
+            <path>raw_data/6_dB_fan/fan/id_02/</path>
+            <path>raw_data/6_dB_fan/fan/id_04/</path>
+            <path>raw_data/6_dB_fan/fan/id_06/</path>
+
+            <path>raw_data/0_dB_fan/fan/id_00/</path>
+            <path>raw_data/0_dB_fan/fan/id_02/</path>
+            <path>raw_data/0_dB_fan/fan/id_04/</path>
+            <path>raw_data/0_dB_fan/fan/id_06/</path>
+
+            <path>raw_data/-6_dB_fan/fan/id_00/</path>
+            <path>raw_data/-6_dB_fan/fan/id_02/</path>
+            <path>raw_data/-6_dB_fan/fan/id_04/</path>
+            <path>raw_data/-6_dB_fan/fan/id_06/</path>
+
+
+            <path>raw_data/6_dB_slider/slider/id_00/</path>
+            <path>raw_data/6_dB_slider/slider/id_02/</path>
+            <path>raw_data/6_dB_slider/slider/id_04/</path>
+            <path>raw_data/6_dB_slider/slider/id_06/</path>
+
+            <path>raw_data/0_dB_slider/slider/id_00/</path>
+            <path>raw_data/0_dB_slider/slider/id_02/</path>
+            <path>raw_data/0_dB_slider/slider/id_04/</path>
+            <path>raw_data/0_dB_slider/slider/id_06/</path>
+
+            <path>raw_data/-6_dB_slider/slider/id_00/</path>
+            <path>raw_data/-6_dB_slider/slider/id_02/</path>
+            <path>raw_data/-6_dB_slider/slider/id_04/</path>
+            <path>raw_data/-6_dB_slider/slider/id_06/</path>
+
+
+            <path>raw_data/6_dB_pump/pump/id_00/</path>
+            <path>raw_data/6_dB_pump/pump/id_02/</path>
+            <path>raw_data/6_dB_pump/pump/id_04/</path>
+            <path>raw_data/6_dB_pump/pump/id_06/</path>
+
+            <path>raw_data/0_dB_pump/pump/id_00/</path>
+            <path>raw_data/0_dB_pump/pump/id_02/</path>
+            <path>raw_data/0_dB_pump/pump/id_04/</path>
+            <path>raw_data/0_dB_pump/pump/id_06/</path>
+
+            <path>raw_data/-6_dB_pump/pump/id_00/</path>
+            <path>raw_data/-6_dB_pump/pump/id_02/</path>
+            <path>raw_data/-6_dB_pump/pump/id_04/</path>
+            <path>raw_data/-6_dB_pump/pump/id_06/</path>
         </inputs>
+
         <outputs>
-            <path>processed_features/6_dB_valve/id_00/</path>
-            <path>processed_features/6_dB_valve/id_02/</path>
-            <path>processed_features/6_dB_valve/id_04/</path>
-            <path>processed_features/6_dB_valve/id_06/</path>
+            <path>processed_features/6_dB_valve/valve/id_00/</path>
+            <path>processed_features/6_dB_valve/valve/id_02/</path>
+            <path>processed_features/6_dB_valve/valve/id_04/</path>
+            <path>processed_features/6_dB_valve/valve/id_06/</path>
+
+            <path>processed_features/0_dB_valve/valve/id_00/</path>
+            <path>processed_features/0_dB_valve/valve/id_02/</path>
+            <path>processed_features/0_dB_valve/valve/id_04/</path>
+            <path>processed_features/0_dB_valve/valve/id_06/</path>
+
+            <path>processed_features/-6_dB_valve/valve/id_00/</path>
+            <path>processed_features/-6_dB_valve/valve/id_02/</path>
+            <path>processed_features/-6_dB_valve/valve/id_04/</path>
+            <path>processed_features/-6_dB_valve/valve/id_06/</path>
+
+
+            <path>processed_features/6_dB_fan/fan/id_00/</path>
+            <path>processed_features/6_dB_fan/fan/id_02/</path>
+            <path>processed_features/6_dB_fan/fan/id_04/</path>
+            <path>processed_features/6_dB_fan/fan/id_06/</path>
+
+            <path>processed_features/0_dB_fan/fan/id_00/</path>
+            <path>processed_features/0_dB_fan/fan/id_02/</path>
+            <path>processed_features/0_dB_fan/fan/id_04/</path>
+            <path>processed_features/0_dB_fan/fan/id_06/</path>
+
+            <path>processed_features/-6_dB_fan/fan/id_00/</path>
+            <path>processed_features/-6_dB_fan/fan/id_02/</path>
+            <path>processed_features/-6_dB_fan/fan/id_04/</path>
+            <path>processed_features/-6_dB_fan/fan/id_06/</path>
+
+
+            <path>processed_features/6_dB_slider/slider/id_00/</path>
+            <path>processed_features/6_dB_slider/slider/id_02/</path>
+            <path>processed_features/6_dB_slider/slider/id_04/</path>
+            <path>processed_features/6_dB_slider/slider/id_06/</path>
+
+            <path>processed_features/0_dB_slider/slider/id_00/</path>
+            <path>processed_features/0_dB_slider/slider/id_02/</path>
+            <path>processed_features/0_dB_slider/slider/id_04/</path>
+            <path>processed_features/0_dB_slider/slider/id_06/</path>
+
+            <path>processed_features/-6_dB_slider/slider/id_00/</path>
+            <path>processed_features/-6_dB_slider/slider/id_02/</path>
+            <path>processed_features/-6_dB_slider/slider/id_04/</path>
+            <path>processed_features/-6_dB_slider/slider/id_06/</path>
+
+
+            <path>processed_features/6_dB_pump/pump/id_00/</path>
+            <path>processed_features/6_dB_pump/pump/id_02/</path>
+            <path>processed_features/6_dB_pump/pump/id_04/</path>
+            <path>processed_features/6_dB_pump/pump/id_06/</path>
+
+            <path>processed_features/0_dB_pump/pump/id_00/</path>
+            <path>processed_features/0_dB_pump/pump/id_02/</path>
+            <path>processed_features/0_dB_pump/pump/id_04/</path>
+            <path>processed_features/0_dB_pump/pump/id_06/</path>
+
+            <path>processed_features/-6_dB_pump/pump/id_00/</path>
+            <path>processed_features/-6_dB_pump/pump/id_02/</path>
+            <path>processed_features/-6_dB_pump/pump/id_04/</path>
+            <path>processed_features/-6_dB_pump/pump/id_06/</path>
         </outputs>
+
         <scalers>
-            <path>scalers/6_dB_valve/id_00/</path>
-            <path>scalers/6_dB_valve/id_02/</path>
-            <path>scalers/6_dB_valve/id_04/</path>
-            <path>scalers/6_dB_valve/id_06/</path>
+            <path>scalers/6_dB_valve/valve/id_00/</path>
+            <path>scalers/6_dB_valve/valve/id_02/</path>
+            <path>scalers/6_dB_valve/valve/id_04/</path>
+            <path>scalers/6_dB_valve/valve/id_06/</path>
+
+            <path>scalers/0_dB_valve/valve/id_00/</path>
+            <path>scalers/0_dB_valve/valve/id_02/</path>
+            <path>scalers/0_dB_valve/valve/id_04/</path>
+            <path>scalers/0_dB_valve/valve/id_06/</path>
+
+            <path>scalers/-6_dB_valve/valve/id_00/</path>
+            <path>scalers/-6_dB_valve/valve/id_02/</path>
+            <path>scalers/-6_dB_valve/valve/id_04/</path>
+            <path>scalers/-6_dB_valve/valve/id_06/</path>
+
+
+            <path>scalers/6_dB_fan/fan/id_00/</path>
+            <path>scalers/6_dB_fan/fan/id_02/</path>
+            <path>scalers/6_dB_fan/fan/id_04/</path>
+            <path>scalers/6_dB_fan/fan/id_06/</path>
+
+            <path>scalers/0_dB_fan/fan/id_00/</path>
+            <path>scalers/0_dB_fan/fan/id_02/</path>
+            <path>scalers/0_dB_fan/fan/id_04/</path>
+            <path>scalers/0_dB_fan/fan/id_06/</path>
+
+            <path>scalers/-6_dB_fan/fan/id_00/</path>
+            <path>scalers/-6_dB_fan/fan/id_02/</path>
+            <path>scalers/-6_dB_fan/fan/id_04/</path>
+            <path>scalers/-6_dB_fan/fan/id_06/</path>
+
+
+            <path>scalers/6_dB_slider/slider/id_00/</path>
+            <path>scalers/6_dB_slider/slider/id_02/</path>
+            <path>scalers/6_dB_slider/slider/id_04/</path>
+            <path>scalers/6_dB_slider/slider/id_06/</path>
+
+            <path>scalers/0_dB_slider/slider/id_00/</path>
+            <path>scalers/0_dB_slider/slider/id_02/</path>
+            <path>scalers/0_dB_slider/slider/id_04/</path>
+            <path>scalers/0_dB_slider/slider/id_06/</path>
+
+            <path>scalers/-6_dB_slider/slider/id_00/</path>
+            <path>scalers/-6_dB_slider/slider/id_02/</path>
+            <path>scalers/-6_dB_slider/slider/id_04/</path>
+            <path>scalers/-6_dB_slider/slider/id_06/</path>
+
+
+            <path>scalers/6_dB_pump/pump/id_00/</path>
+            <path>scalers/6_dB_pump/pump/id_02/</path>
+            <path>scalers/6_dB_pump/pump/id_04/</path>
+            <path>scalers/6_dB_pump/pump/id_06/</path>
+
+            <path>scalers/0_dB_pump/pump/id_00/</path>
+            <path>scalers/0_dB_pump/pump/id_02/</path>
+            <path>scalers/0_dB_pump/pump/id_04/</path>
+            <path>scalers/0_dB_pump/pump/id_06/</path>
+
+            <path>scalers/-6_dB_pump/pump/id_00/</path>
+            <path>scalers/-6_dB_pump/pump/id_02/</path>
+            <path>scalers/-6_dB_pump/pump/id_04/</path>
+            <path>scalers/-6_dB_pump/pump/id_06/</path>
         </scalers>
+
         <buffer_dir>audio_buffer</buffer_dir>
+        
         <model_dir_edge>model/edge</model_dir_edge>
+
         <model_dir_gpu>model/gpu</model_dir_gpu>
+
         <model_dir_classify>model/classifier</model_dir_classify>
+
         <buffer_dir>audio_buffer</buffer_dir>
     </directories>
-    
+
     <audio_params>
         <sampling_rate>16000</sampling_rate>
         <n_mels>128</n_mels>

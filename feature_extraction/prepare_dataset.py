@@ -74,18 +74,18 @@ def batch_process(input_dir, output_dir, scaler_dir):
         master_noise=master_noise,
     )
 
-    # with ProcessPoolExecutor() as executor:
-    #     results = list(
-    #         tqdm(
-    #             executor.map(worker_func, all_files, chunksize=20), total=len(all_files)
-    #         )
-    #     )
-    #
-    # end = time.perf_counter()
-    # print(f"FINISHED in {round(end - start, 2)} seconds.")
-    # print(
-    #     f"\t{results.count(0)} NORMAL files\n\t{results.count(1)} ABNORMAL files\n\t{results.count(-1)} ERRORS"
-    # )
+    with ProcessPoolExecutor() as executor:
+        results = list(
+            tqdm(
+                executor.map(worker_func, all_files, chunksize=20), total=len(all_files)
+            )
+        )
+
+    end = time.perf_counter()
+    print(f"FINISHED in {round(end - start, 2)} seconds.")
+    print(
+        f"\t{results.count(0)} NORMAL files\n\t{results.count(1)} ABNORMAL files\n\t{results.count(-1)} ERRORS"
+    )
 
 
 if __name__ == "__main__":

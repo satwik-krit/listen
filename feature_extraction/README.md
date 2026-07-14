@@ -1,6 +1,6 @@
 # USAGE INSTRUCTIONS
 ## Preprocess dataset for training
-Simply run `py feature_extraction\preprocess.py` from the directory of the project.
+Simply run `py -m feature_extraction.prepare_dataset` from the directory of the project.
 This will create everything required - scalers, masks and of course the extracted features.
 
 ## To process incoming audio

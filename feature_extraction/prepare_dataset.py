@@ -1,5 +1,5 @@
 import time
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
 import numpy as np
 from tqdm import tqdm
@@ -75,11 +75,20 @@ def batch_process(input_dir, output_dir, scaler_dir):
     )
 
     with ProcessPoolExecutor() as executor:
-        results = list(
-            tqdm(
-                executor.map(worker_func, all_files, chunksize=20), total=len(all_files)
-            )
-        )
+        future_map = {
+            executor.submit(worker_func, file): file
+            for file in all_files
+        }
+
+        results = []
+
+        for future in tqdm(as_completed(future_map), total=len(future_map)):
+            file = future_map[future]
+            try:
+                results.append(future.result())
+            except Exception as e:
+                print(f"Error processing {file}: {e}")
+                results.append(-1)
 
     end = time.perf_counter()
     print(f"FINISHED in {round(end - start, 2)} seconds.")
